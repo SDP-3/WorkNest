@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 
 void main() {
   runApp(const WorkNestApp());
@@ -193,10 +196,10 @@ class LoginScreen extends StatelessWidget {
                         );
                       },
                       style: TextButton.styleFrom(
-                        foregroundColor: Colors.blue[900], // deep blue
+                        foregroundColor: Colors.blue[900],
                         textStyle: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.none, // remove underline
+                          decoration: TextDecoration.none,
                         ),
                       ),
                       child: const Text("Register"),
@@ -213,13 +216,58 @@ class LoginScreen extends StatelessWidget {
 }
 
 // ---------------------- REGISTRATION SCREEN ----------------------
-class RegistrationScreen extends StatelessWidget {
+class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
+
+  @override
+  State<RegistrationScreen> createState() => _RegistrationScreenState();
+}
+
+class _RegistrationScreenState extends State<RegistrationScreen> {
+  File? _image;
+  String _location = ""; // প্রথমে কিছু দেখাবে না
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> pickImage() async {
+    final XFile? pickedImage =
+        await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedImage != null) {
+      setState(() {
+        _image = File(pickedImage.path);
+      });
+    }
+  }
+
+  Future<void> getUserLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enable location services')));
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission denied')));
+        return;
+      }
+    }
+
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    setState(() {
+      _location = "Lat: ${position.latitude}, Long: ${position.longitude}";
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.lightBlueAccent, // same as Login
+      backgroundColor: Colors.lightBlueAccent,
       appBar: AppBar(
         title: const Text("Create Account"),
         backgroundColor: Colors.blue,
@@ -229,7 +277,19 @@ class RegistrationScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              // Full Name
+              GestureDetector(
+                onTap: pickImage,
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.white,
+                  backgroundImage: _image != null ? FileImage(_image!) : null,
+                  child: _image == null
+                      ? const Icon(Icons.camera_alt, size: 40, color: Colors.blue)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 20),
+
               TextField(
                 decoration: InputDecoration(
                   hintText: "Full Name",
@@ -243,7 +303,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Email
               TextField(
                 decoration: InputDecoration(
                   hintText: "Email",
@@ -257,7 +316,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Phone
               TextField(
                 decoration: InputDecoration(
                   hintText: "Phone Number",
@@ -271,7 +329,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Password
               TextField(
                 obscureText: true,
                 decoration: InputDecoration(
@@ -286,7 +343,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Confirm Password
               TextField(
                 obscureText: true,
                 decoration: InputDecoration(
@@ -301,7 +357,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // User Type
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   filled: true,
@@ -320,7 +375,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Gender
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   filled: true,
@@ -340,7 +394,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Father's / Guardian Name
               TextField(
                 decoration: InputDecoration(
                   hintText: "Father's / Guardian Name",
@@ -354,7 +407,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Present Address
               TextField(
                 decoration: InputDecoration(
                   hintText: "Present Address",
@@ -368,7 +420,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Permanent Address
               TextField(
                 decoration: InputDecoration(
                   hintText: "Permanent Address",
@@ -382,7 +433,6 @@ class RegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // NID / Birth Certificate Number
               TextField(
                 decoration: InputDecoration(
                   hintText: "NID / Birth Certificate Number",
@@ -394,12 +444,34 @@ class RegistrationScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 15),
+
+              ElevatedButton.icon(
+                onPressed: getUserLocation,
+                icon: const Icon(Icons.location_on),
+                label: const Text("Share Location"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[900],
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Show location only if available
+              _location.isNotEmpty
+                  ? Text(
+                      _location,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    )
+                  : Container(),
+
               const SizedBox(height: 30),
 
-              // Create Account Button
               ElevatedButton(
                 onPressed: () {
-                  // Navigate back to Login after registration
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
