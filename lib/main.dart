@@ -1,5 +1,3 @@
-// ignore_for_file: deprecated_member_use
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -231,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => EmployerHomePage(
-                                  userData: user, // ✅ Fix: userData পাঠানো
+                                  userData: user, 
                                 ),
                               ),
                             );
@@ -264,7 +262,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 10),
                 GestureDetector(
                   onTap: () {
-                    // এখানে তুমি চাও তো PasswordRecoveryScreen() এ নিতে পারো
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -296,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     );
                   },
-                  child: const Text("Don't have an account? Register", style: TextStyle(color: Colors.white)),
+                  child: const Text("Don't have an account? Register", style: TextStyle(color: Colors.black)),
                 ),
               ],
             ),
@@ -539,7 +536,7 @@ class JobSeekerHomePage extends StatelessWidget {
 // ---------------------- EMPLOYER HOME PAGE ----------------------
 
 class EmployerHomePage extends StatelessWidget {
-  final Map<String, String> userData; // Registration থেকে আসা info
+  final Map<String, String> userData; 
   const EmployerHomePage({super.key, required this.userData});
 
   @override
@@ -632,7 +629,7 @@ class EmployerHomePage extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 20), // spacing before grid
+              const SizedBox(height: 20), 
 
               // ------------------ Grid items ------------------
               Expanded(
@@ -894,7 +891,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Registration Successful")));
 
-    // Navigate to home page based on user type
     if (userType == 'employer') {
       Navigator.pushReplacement(
         context,
@@ -910,7 +906,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // UI unchanged, just _registerUser updated
     return Scaffold(
       backgroundColor: Colors.lightBlueAccent,
       body: SafeArea(
@@ -942,7 +937,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const SizedBox(height: 15),
               TextField(controller: permanentAddressController, decoration: _inputDecoration("Permanent Address")),
               const SizedBox(height: 15),
-              TextField(controller: nidController, decoration: _inputDecoration("NID")),
+              
+              TextField(controller: nidController, decoration: _inputDecoration("NID / Birth Certificate")),
+              
               const SizedBox(height: 15),
               TextField(controller: passwordController, obscureText: true, decoration: _inputDecoration("Password")),
               const SizedBox(height: 15),
@@ -969,7 +966,23 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 decoration: _inputDecorationDropdown("Select Gender"),
               ),
               const SizedBox(height: 15),
-              ElevatedButton(onPressed: getUserLocation, child: const Text("Get Location")),
+
+              // ✅ Location Button (Only Icon)
+              ElevatedButton(
+                onPressed: getUserLocation,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  shape: const CircleBorder(),
+                  padding: const EdgeInsets.all(15),
+                  shadowColor: Colors.blueAccent,
+                ),
+                child: const Icon(
+                  Icons.location_on,
+                  color: Colors.blue,
+                  size: 30,
+                ),
+              ),
+
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _registerUser,
@@ -989,7 +1002,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 }
 
-// --------------------------- EMPLOYER PROFILE PAGE (Gender Dropdown Only Editable) ---------------------------
+
+// --------------------------- EMPLOYER PROFILE PAGE ---------------------------
 
 class EmployerProfilePage extends StatefulWidget {
   final Map<String, String> userData;
@@ -1009,7 +1023,9 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
   late Map<String, String> user;
   bool isEditing = false;
   String? selectedGender;
-  String? imagePath;
+  File? _image;
+  final ImagePicker _picker = ImagePicker();
+  String _location = "";
 
   late TextEditingController nameController;
   late TextEditingController emailController;
@@ -1033,9 +1049,8 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
     permanentAddressController = TextEditingController(text: user['permanentAddress']);
     nidController = TextEditingController(text: user['nid']);
     locationController = TextEditingController(text: user['location']);
-
+    _location = user['location'] ?? "";
     selectedGender = user['gender'];
-    imagePath = user['photo'];
   }
 
   @override
@@ -1077,9 +1092,37 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
     );
   }
 
-  Future<void> _pickImage() async {
+  Future<void> pickImage() async {
+    final XFile? pickedImage = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedImage != null) {
+      setState(() {
+        _image = File(pickedImage.path);
+      });
+    }
+  }
+
+  Future<void> _getUserLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Enable location services')));
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Location permission denied')));
+        return;
+      }
+    }
+
+    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     setState(() {
-      imagePath = "assets/sample_profile.png";
+      _location = "Lat: ${position.latitude}, Long: ${position.longitude}";
+      locationController.text = _location;
     });
   }
 
@@ -1094,19 +1137,18 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
       user['nid'] = nidController.text.trim();
       user['location'] = locationController.text.trim();
 
-      if (selectedGender != null && ["Male","Female","Other"].contains(selectedGender)) {
+      if (selectedGender != null && ["Male", "Female", "Other"].contains(selectedGender)) {
         user['gender'] = selectedGender!;
       }
 
-      user['photo'] = imagePath ?? '';
+      if (_image != null) user['imagePath'] = _image!.path;
       isEditing = false;
     });
 
     widget.onUpdate(user);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Profile updated successfully")),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("Profile updated successfully")));
   }
 
   @override
@@ -1123,13 +1165,17 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
           children: [
             // Profile photo
             GestureDetector(
-              onTap: isEditing ? _pickImage : null,
+              onTap: isEditing ? pickImage : null,
               child: CircleAvatar(
                 radius: 55,
                 backgroundColor: Colors.white,
-                backgroundImage: imagePath != null ? AssetImage(imagePath!) : null,
-                child: imagePath == null
-                    ? Icon(Icons.person, size: 60, color: Colors.grey[600])
+                backgroundImage: _image != null
+                    ? FileImage(_image!)
+                    : (user['imagePath'] != null
+                        ? FileImage(File(user['imagePath']!))
+                        : null),
+                child: _image == null && user['imagePath'] == null
+                    ? const Icon(Icons.camera_alt, size: 40, color: Colors.blue)
                     : null,
               ),
             ),
@@ -1148,11 +1194,50 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                     _buildField("Father Name", fatherController, enabled: isEditing),
                     _buildField("Present Address", presentAddressController, enabled: isEditing),
                     _buildField("Permanent Address", permanentAddressController, enabled: isEditing),
-                    _buildField("NID", nidController, enabled: isEditing),
-                    _buildField("Location", locationController, enabled: isEditing),
+                    _buildField("NID / Birth Certificate", nidController, enabled: isEditing),
+
+                    // Location field like registration screen
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Location",
+                              style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue[900])),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: locationController,
+                                  enabled: false,
+                                  decoration: _inputDecoration("Location"),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              if (isEditing)
+                                ElevatedButton(
+                                  onPressed: _getUserLocation,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    shape: const CircleBorder(),
+                                    padding: const EdgeInsets.all(12),
+                                  ),
+                                  child: const Icon(Icons.location_on,
+                                      color: Colors.blue, size: 28),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
 
                     // User Type (readonly)
-                    _buildField("User Type", TextEditingController(text: user['userType']), enabled: false),
+                    _buildField("User Type",
+                        TextEditingController(text: user['userType']), enabled: false),
 
                     // Gender dropdown
                     Padding(
@@ -1162,7 +1247,9 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                         children: [
                           Text("Gender",
                               style: GoogleFonts.poppins(
-                                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue[900])),
                           const SizedBox(height: 5),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -1174,7 +1261,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
                                 value: selectedGender != null &&
-                                        ["Male","Female","Other"].contains(selectedGender)
+                                        ["Male", "Female", "Other"].contains(selectedGender)
                                     ? selectedGender
                                     : null,
                                 isExpanded: true,
@@ -1217,7 +1304,8 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
-              child: Text(isEditing ? "Save Changes" : "Update Profile", style: const TextStyle(fontSize: 16)),
+              child: Text(isEditing ? "Save Changes" : "Update Profile",
+                  style: const TextStyle(fontSize: 16)),
             ),
           ],
         ),
@@ -1226,8 +1314,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
   }
 }
 
-
-// --------------------------- JOB SEEKER PROFILE PAGE (User Type Readonly, Gender Editable) ---------------------------
+// --------------------------- JOB SEEKER PROFILE PAGE ---------------------------
 
 class JobSeekerProfilePage extends StatefulWidget {
   final Map<String, String> userData;
@@ -1296,6 +1383,19 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
     }
   }
 
+  Future<void> getCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      setState(() {
+        locationController.text = "Lat: ${position.latitude}, Lon: ${position.longitude}";
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Unable to fetch location")),
+      );
+    }
+  }
+
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
@@ -1331,11 +1431,8 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
       user['nid'] = nidController.text.trim();
       user['location'] = locationController.text.trim();
 
-      // Only update gender and image
-      if (["Male","Female","Other"].contains(gender)) user['gender'] = gender;
+      if (["Male", "Female", "Other"].contains(gender)) user['gender'] = gender;
       if (_image != null) user['imagePath'] = _image!.path;
-
-      // User type remains readonly
       user['userType'] = userType;
 
       isEditing = false;
@@ -1343,7 +1440,9 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
 
     widget.onUpdate(user);
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile updated successfully")));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Profile updated successfully")),
+    );
   }
 
   @override
@@ -1385,19 +1484,50 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
                     _buildField("Father Name", fatherController, enabled: isEditing),
                     _buildField("Present Address", presentAddressController, enabled: isEditing),
                     _buildField("Permanent Address", permanentAddressController, enabled: isEditing),
-                    _buildField("NID", nidController, enabled: isEditing),
-                    _buildField("Location", locationController, enabled: isEditing),
+                    _buildField("NID / Birth Certificate", nidController, enabled: isEditing),
 
-                    // User Type (readonly)
-                    _buildField("User Type", TextEditingController(text: user['userType']), enabled: false),
-
-                    // Gender dropdown editable
+                    // Location field same as registration
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Gender", style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
+                          Text("Location",
+                              style: GoogleFonts.poppins(
+                                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: locationController,
+                                  enabled: isEditing,
+                                  decoration: _inputDecoration("Enter Location"),
+                                ),
+                              ),
+                              if (isEditing)
+                                IconButton(
+                                  icon: const Icon(Icons.location_on, color: Colors.blue),
+                                  onPressed: getCurrentLocation,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // User Type (readonly)
+                    _buildField("User Type", TextEditingController(text: user['userType']), enabled: false),
+
+                    // Gender dropdown
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Gender",
+                              style: GoogleFonts.poppins(
+                                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
                           const SizedBox(height: 5),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -1408,7 +1538,7 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
-                                value: ["Male","Female","Other"].contains(gender) ? gender : null,
+                                value: ["Male", "Female", "Other"].contains(gender) ? gender : null,
                                 isExpanded: true,
                                 onChanged: isEditing
                                     ? (value) {
@@ -1432,6 +1562,7 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
                 ),
               ),
             ),
+
             const SizedBox(height: 30),
 
             ElevatedButton(
@@ -1462,7 +1593,7 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
 
 // ---------------------- POST JOB PAGE ----------------------
 class PostJobPage extends StatefulWidget {
-  final Map<String, String> employerData; // Employer info pass korte hobe
+  final Map<String, String> employerData; 
 
   const PostJobPage({super.key, required this.employerData});
 
@@ -1480,7 +1611,7 @@ class _PostJobPageState extends State<PostJobPage> {
   String jobType = "Full-time";
   String jobCategory = "Driver"; // default category
 
-  // Temporary job list (future Job Feed e use korte parba)
+  // Temporary job list
   List<Map<String, String>> postedJobs = [];
 
   void _postJob() {
@@ -1729,7 +1860,7 @@ class JobBoardPage extends StatelessWidget {
         itemBuilder: (context, index) {
           final job = jobs[index];
           return Card(
-            color: Colors.lightBlue[100], // All cards sky blue
+            color: Colors.lightBlue[100],
             margin: const EdgeInsets.all(12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
@@ -1749,19 +1880,21 @@ class JobBoardPage extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      ElevatedButton(
+                      // Apply Button with hover
+                      _HoverButton(
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text("Applied for ${job['title']}")),
                           );
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromARGB(255, 69, 202, 98),
-                        ),
-                        child: const Text("Apply"),
+                        text: "Apply",
+                        backgroundColor: const Color.fromARGB(255, 69, 202, 98),
+                        hoverColor: const Color.fromARGB(255, 52, 180, 75),
+                        textColor: Colors.white,
                       ),
                       const SizedBox(width: 10),
-                      OutlinedButton(
+                      // Details Button with hover
+                      _HoverOutlinedButton(
                         onPressed: () {
                           showDialog(
                             context: context,
@@ -1794,7 +1927,7 @@ class JobBoardPage extends StatelessWidget {
                             },
                           );
                         },
-                        child: const Text("Details"),
+                        text: "Details",
                       ),
                     ],
                   ),
@@ -1807,6 +1940,95 @@ class JobBoardPage extends StatelessWidget {
     );
   }
 }
+
+// ---------------- Hoverable Elevated Button ----------------
+class _HoverButton extends StatefulWidget {
+  final VoidCallback onPressed;
+  final String text;
+  final Color backgroundColor;
+  final Color hoverColor;
+  final Color textColor;
+
+  const _HoverButton({
+    required this.onPressed,
+    required this.text,
+    required this.backgroundColor,
+    required this.hoverColor,
+    required this.textColor,
+  });
+
+  @override
+  State<_HoverButton> createState() => _HoverButtonState();
+}
+
+class _HoverButtonState extends State<_HoverButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() {
+        _isHovered = true;
+      }),
+      onExit: (_) => setState(() {
+        _isHovered = false;
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: _isHovered ? (Matrix4.identity()..scale(1.05)) : Matrix4.identity(),
+        child: ElevatedButton(
+          onPressed: widget.onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _isHovered ? widget.hoverColor : widget.backgroundColor,
+          ),
+          child: Text(widget.text, style: TextStyle(color: widget.textColor)),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------- Hoverable Outlined Button ----------------
+class _HoverOutlinedButton extends StatefulWidget {
+  final VoidCallback onPressed;
+  final String text;
+
+  const _HoverOutlinedButton({required this.onPressed, required this.text});
+
+  @override
+  State<_HoverOutlinedButton> createState() => _HoverOutlinedButtonState();
+}
+
+class _HoverOutlinedButtonState extends State<_HoverOutlinedButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() {
+        _isHovered = true;
+      }),
+      onExit: (_) => setState(() {
+        _isHovered = false;
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: _isHovered ? Colors.blue[50] : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: OutlinedButton(
+          onPressed: widget.onPressed,
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: _isHovered ? Colors.blue[900]! : Colors.grey),
+          ),
+          child: Text(widget.text, style: TextStyle(color: Colors.blue[900])),
+        ),
+      ),
+    );
+  }
+}
+
 // ---------------------- APPLIED JOBS PAGE ----------------------
 
 
@@ -2056,7 +2278,7 @@ class CustomerCarePage extends StatelessWidget {
                 subtitle: "+880 1234 567 890",
                 color: Colors.green,
                 onTap: () {
-                  // এখানে url_launcher দিয়ে ফোন call করা যাবে
+                  
                 },
               ),
               const SizedBox(height: 15),
@@ -2177,37 +2399,76 @@ class JobApplicationsPage extends StatefulWidget {
 }
 
 class _JobApplicationsPageState extends State<JobApplicationsPage> {
-  // Sample job applications list
   List<Map<String, dynamic>> jobApplications = [
     {
       'jobTitle': 'Delivery Man',
       'applicantName': 'Nasif',
       'status': 'Pending',
-      'phone': '+880123456789'
+      'phone': '+880123456789',
+      'email': 'nasif@example.com',
+      'father': 'Mr. Rahman',
+      'presentAddress': 'Mirpur, Dhaka',
+      'permanentAddress': 'Satkhira',
+      'nid': '1234567890',
+      'gender': 'Male',
+      'location': 'Lat: 23.8103, Long: 90.4125',
+      'bio': 'Experienced delivery person with 2 years at FastExpress.'
     },
     {
       'jobTitle': 'House Maid',
       'applicantName': 'Rimpy',
       'status': 'Pending',
-      'phone': '+880987654321'
+      'phone': '+880987654321',
+      'email': 'rimpy@example.com',
+      'father': 'Mr. Khan',
+      'presentAddress': 'Uttara, Dhaka',
+      'permanentAddress': 'Gazipur',
+      'nid': '0987654321',
+      'gender': 'Female',
+      'location': 'Lat: 23.8740, Long: 90.3983',
+      'bio': 'Professional house maid with 3 years experience.'
     },
     {
       'jobTitle': 'Driver',
       'applicantName': 'Sifat',
       'status': 'Pending',
-      'phone': '+880987654321'
+      'phone': '+880987654321',
+      'email': 'sifat@example.com',
+      'father': 'Md. Chowdhury',
+      'presentAddress': 'Banani, Dhaka',
+      'permanentAddress': 'Gaibandha',
+      'nid': '1122334455',
+      'gender': 'Male',
+      'location': 'Lat: 23.7924, Long: 90.4070',
+      'bio': 'Experienced driver with valid license and 5 years experience.'
     },
     {
       'jobTitle': 'Cleaner',
       'applicantName': 'Bidhan',
       'status': 'Pending',
-      'phone': '+880987654321'
+      'phone': '+880987654321',
+      'email': 'bidhan@example.com',
+      'father': 'Mr. Das',
+      'presentAddress': 'Gulshan, Dhaka',
+      'permanentAddress': 'Chattogram',
+      'nid': '6677889900',
+      'gender': 'Male',
+      'location': 'Lat: 23.8103, Long: 90.4125',
+      'bio': 'Punctual office cleaner with 2 years experience.'
     },
     {
       'jobTitle': 'Security Guard',
       'applicantName': 'Alif',
       'status': 'Pending',
-      'phone': '+880987654321'
+      'phone': '+880987654321',
+      'email': 'alif@example.com',
+      'father': 'Mr. Rahim',
+      'presentAddress': 'Uttara, Dhaka',
+      'permanentAddress': 'Rajshahi',
+      'nid': '5566778899',
+      'gender': 'Male',
+      'location': 'Lat: 23.8740, Long: 90.3983',
+      'bio': 'Trained security guard with 4 years experience.'
     },
   ];
 
@@ -2253,14 +2514,15 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                           fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      "Applicant: ${application['applicantName']}",
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
+                    
+                    // Row with applicant name + status
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        Text(
+                          "Applicant: ${application['applicantName']}",
+                          style: const TextStyle(fontSize: 16),
+                        ),
                         Text(
                           application['status'],
                           style: TextStyle(
@@ -2268,54 +2530,97 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                               color: statusColor,
                               fontSize: 16),
                         ),
-                        Row(
-                          children: [
-                            if (application['status'] == 'Pending') ...[
-                              ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    application['status'] = 'Approved';
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text(
-                                            "${application['applicantName']} approved! Customer Care can now call.")),
-                                  );
-                                },
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green),
-                                child: const Text("Approve"),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    application['status'] = 'Cancelled';
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red),
-                                child: const Text("Cancel"),
-                              ),
-                            ] else if (application['status'] == 'Approved') ...[
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  // Launch customer care call functionality
-                                  final ccrNumber = application['phone'];
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text(
-                                            "Call Customer Care to connect with ${application['applicantName']}")),
-                                  );
-                                },
-                                icon: const Icon(Icons.call),
-                                label: const Text("CCR Call"),
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue[900]),
-                              )
-                            ]
-                          ],
-                        )
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Row with Details button + Approve/Cancel buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) {
+                                return AlertDialog(
+                                  title: Text(application['applicantName']),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text("Email: ${application['email']}"),
+                                      Text("Phone: ${application['phone']}"),
+                                      Text("Father: ${application['father']}"),
+                                      Text(
+                                          "Present Address: ${application['presentAddress']}"),
+                                      Text(
+                                          "Permanent Address: ${application['permanentAddress']}"),
+                                      Text("NID: ${application['nid']}"),
+                                      Text("Gender: ${application['gender']}"),
+                                      Text("Location: ${application['location']}"),
+                                      const SizedBox(height: 8),
+                                      Text("Bio: ${application['bio']}"),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context),
+                                      child: const Text("Close"),
+                                    )
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                          child: const Text("Details"),
+                        ),
+                        const SizedBox(width: 8),
+                        if (application['status'] == 'Pending') ...[
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                application['status'] = 'Approved';
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text(
+                                        "${application['applicantName']} approved! Customer Care can now call.")),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green),
+                            child: const Text("Approve"),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                application['status'] = 'Cancelled';
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red),
+                            child: const Text("Cancel"),
+                          ),
+                        ] else if (application['status'] == 'Approved') ...[
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              final ccrNumber = application['phone'];
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text(
+                                        "Call Customer Care to connect with ${application['applicantName']}")),
+                              );
+                            },
+                            icon: const Icon(Icons.call),
+                            label: const Text("CCR Call"),
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue[900]),
+                          ),
+                        ]
                       ],
                     )
                   ],
@@ -2328,5 +2633,6 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
     );
   }
 }
+
 
 
