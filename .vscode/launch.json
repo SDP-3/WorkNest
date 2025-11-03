@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "cwd": "/Users/bidhan/Flutter_Project/WorkNest/linux/runner",
+      "program": "/Users/bidhan/Flutter_Project/WorkNest/linux/runner/build/Debug/outDebug"
+    }
+  ]
+}

@@ -8,19 +8,23 @@ class NotificationListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.lightBlueAccent,
+      backgroundColor: Colors.lightBlueAccent, // আপনার থিমের সাথে মিল রেখে
       appBar: AppBar(
         title: Text(
           "All Notifications",
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.blue[900],
+        backgroundColor: Colors.blue[900], // আপনার থিমের সাথে মিল রেখে
+        // AppBar নিজে থেকেই back button অ্যাড করে নেবে
       ),
       body: ListView.builder(
-        itemCount: 10,
+        itemCount: 10, // আপাতত ১০টা ডেমো নোটিফিকেশন
         itemBuilder: (context, index) {
+          // এই ListTile টাকেই আমরা InkWell দিয়েছিলাম
           return InkWell(
             onTap: () {
+              // এখানে চাপ দিলে নোটিফিকেশনের বিস্তারিত পেজে যাবে
+              // (আপাতত কিছু করার দরকার নেই)
               print("Notification $index tapped");
             },
             child: Card(
