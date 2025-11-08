@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1030054945225",
+    "project_id": "worknest-f0857",
+    "storage_bucket": "worknest-f0857.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030054945225:android:99092e98e9c060b7820818",
+        "android_client_info": {
+          "package_name": "com.example.worknest_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1lktnt0_ytFfDltdKFQBHsjKUHSbWmR0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

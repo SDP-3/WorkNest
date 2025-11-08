@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 
+// <<<--- ১. Firebase প্যাকেজগুলো ইম্পোর্ট করুন ---
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+// TODO: ছবি আপলোডের জন্য 'firebase_storage' প্যাকেজ অ্যাড করতে হবে
+
 // ---------------------- REGISTRATION SCREEN ----------------------
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -32,7 +37,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   String? userType;
   String? gender;
 
-  // --- Image picker function ---
+  // --- ইমেজ পিকার ফাংশন ---
   Future<void> pickImage() async {
     final XFile? pickedImage = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedImage != null) {
@@ -42,12 +47,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     }
   }
 
-  // --- Location picker function ---
+  // --- লোকেশন পিকার ফাংশন ---
   Future<void> getUserLocation() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() { _isLoading = true; });
+    
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (!mounted) return;
@@ -75,7 +78,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     });
   }
 
-  // --- Input Decoration ---
+  // --- ইনপুট ডেকোরেশন ---
   InputDecoration _inputDecoration(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
@@ -116,8 +119,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
-  // --- Register function (No Firebase) ---
+  // <<<--- ২. _registerUser ফাংশন (Firebase সহ) ---
   void _registerUser() async {
+    // ধাপ ক: ফর্ম ভ্যালিড কি না চেক করুন
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please fill all required fields correctly"))
@@ -125,48 +129,82 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
+    // ধাপ খ: পাসওয়ার্ড ম্যাচিং চেক
     String password = passwordController.text.trim();
-    String confirmPassword = confirmPasswordController.text.trim();
-    if (password != confirmPassword) {
+    if (password != confirmPasswordController.text.trim()) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Passwords do not match")));
       return;
     }
 
+    // ধাপ গ: লোডিং শুরু করুন
     setState(() {
       _isLoading = true;
     });
 
-    // Simulating backend call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // ধাপ ঘ: FirebaseAuth-এ ইউজার তৈরি করুন
+      UserCredential userCredential = 
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: password,
+      );
 
-    Map<String, dynamic> userData = {
-      'name': nameController.text.trim(),
-      'email': emailController.text.trim(),
-      'phone': phoneController.text.trim(),
-      'fatherName': fatherController.text.trim(),
-      'presentAddress': presentAddressController.text.trim(),
-      'permanentAddress': permanentAddressController.text.trim(),
-      'nid': nidController.text.trim(),
-      'userType': userType,
-      'gender': gender,
-      'location': _location,
-      'imageUrl': _image?.path,
-    };
-    
-    print("--- Registration Data (Frontend Validated) ---");
-    print(userData);
+      String uid = userCredential.user!.uid;
+      String? imageUrl;
+      
+      // TODO: এখানে ছবি Firebase Storage-এ আপলোড করতে হবে
+      // এবং imageUrl = await storageRef.getDownloadURL(); দিয়ে URL নিতে হবে।
+      // আপাতত শুধু লোকাল পাথ সেভ করা হচ্ছে, যা ঠিক নয়।
+      if (_image != null) {
+        imageUrl = _image!.path; // (Temporary placeholder)
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Registration Successful! (Backend Pending)"))
-    );
-    
-    if (mounted) {
+      // ধাপ ঙ: Cloud Firestore-এ ইউজারের সব তথ্য সেভ করুন
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'uid': uid,
+        'name': nameController.text.trim(),
+        'email': emailController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'fatherName': fatherController.text.trim(),
+        'presentAddress': presentAddressController.text.trim(),
+        'permanentAddress': permanentAddressController.text.trim(),
+        'nid': nidController.text.trim(),
+        'userType': userType, // 'jobSeeker' or 'employer'
+        'gender': gender,     // 'Male', 'Female', 'Other'
+        'location': _location, // Lat, Long string
+        'imageUrl': imageUrl, // ছবির URL
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // ধাপ চ: সফল হলে লগইন পেজে ফেরত যান
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Registration Successful! Please log in."))
+      );
+      Navigator.pop(context); // রেজিস্ট্রেশন পেজ বন্ধ করে লগইন পেজে ফেরত যাবে
+
+    } on FirebaseAuthException catch (e) {
+      // যদি Firebase কোনো एरর দেয় (যেমন: ইমেইল আগেই ব্যবহৃত)
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Registration Failed: ${e.message}"))
+      );
+    } catch (e) {
+      // অন্য কোনো एरর হলে
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("An unknown error occurred: $e"))
+      );
+    }
+
+    // ধাপ ছ: লোডিং শেষ করুন
+    if (mounted) { // উইজেটটি তখনো স্ক্রিনে আছে কি না তা চেক করে
       setState(() {
         _isLoading = false;
       });
-      Navigator.pop(context); // Go back to Login screen
     }
   }
+  // <<<--- ফাংশন আপডেট করা শেষ ---
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +217,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
+                // --- ইমেজ পিকার ---
                 GestureDetector(
                   onTap: pickImage,
                   child: CircleAvatar(
@@ -191,6 +230,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
+
+                // --- TextFormField-গুলো ---
 
                 TextFormField(
                   controller: nameController,
@@ -341,6 +382,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ),
                 const SizedBox(height: 15),
 
+                // --- লোকেশন বাটন ---
                 ElevatedButton(
                   onPressed: getUserLocation,
                   style: ElevatedButton.styleFrom(
@@ -363,6 +405,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
                 const SizedBox(height: 20),
                 
+                // --- রেজিস্টার বাটন ---
                 ElevatedButton(
                   onPressed: _isLoading ? null : _registerUser,
                   style: ElevatedButton.styleFrom(

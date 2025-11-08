@@ -1,5 +1,7 @@
-
 import 'package:flutter/material.dart';
+// Firebase প্যাকেজ
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'registration_screen.dart'; 
 import 'job_seeker_home_page.dart'; 
@@ -14,9 +16,68 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // ফর্ম ভ্যালিডেশন এবং লোডিং-এর জন্য ভেরিয়েবল
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   String userType = 'jobSeeker'; 
+
+  // --- আসল Firebase লগইন ফাংশন ---
+  Future<void> _loginUser() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // ১. Firebase Auth দিয়ে ইমেইল/পাসওয়ার্ড চেক
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+
+      // ২. সফল হলে Firestore থেকে ইউজার ডেটা আনা
+      if (userCredential.user != null) {
+        String uid = userCredential.user!.uid;
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+        if (!userDoc.exists) {
+          throw Exception("User data not found in Database!");
+        }
+
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        String actualUserType = userData['userType'] ?? 'jobSeeker';
+
+        // ৩. ইউজার রোল (Role) চেক করা
+        if (userType != actualUserType) {
+          await FirebaseAuth.instance.signOut(); // ভুল রোল হলে লগআউট করে দেওয়া
+          throw Exception("Account type mismatch! You are a $actualUserType.");
+        }
+
+        // ৪. সঠিক হোম পেজে পাঠানো
+        if (mounted) {
+          if (actualUserType == 'employer') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => EmployerHomePage(userData: userData.map((k, v) => MapEntry(k, v.toString())))),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => JobSeekerHomePage(email: userData['email'])),
+            );
+          }
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login Failed: ${e.message}"), backgroundColor: Colors.red));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,158 +87,137 @@ class _LoginScreenState extends State<LoginScreen> {
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, // Center vertically
-              children: [
-                Image.asset("assets/images/WN_logo.png", width: 250, height: 250),
-                const SizedBox(height: 30),
-                TextField(
-                  controller: emailController,
-                  decoration: InputDecoration(
-                    hintText: "Enter Email or Phone",
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon: const Icon(Icons.email, color: Colors.blue),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-                  ),
-                  keyboardType: TextInputType.emailAddress, // Added keyboard type
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true, // Hides password
-                  decoration: InputDecoration(
-                    hintText: "Enter Password",
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon: const Icon(Icons.lock, color: Colors.blue),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Radio<String>(
-                      value: 'jobSeeker',
-                      groupValue: userType, // Tracks the selected value
-                      onChanged: (value) {
-                        setState(() {
-                          userType = value!; // Updates state on change
-                        });
-                      },
-                      activeColor: Colors.blue[900], // Color when selected
+            // Form উইজেট দিয়ে র‍্যাপ করা হলো
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, 
+                children: [
+                  Image.asset("assets/images/WN_logo.png", width: 250, height: 250),
+                  const SizedBox(height: 30),
+                  
+                  // Email Field (TextFormField ব্যবহার করা হয়েছে ভ্যালিডেশনের জন্য)
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: "Enter Email",
+                      filled: true,
+                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.email, color: Colors.blue),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                     ),
-                    const Text('Job Seeker', style: TextStyle(color: Colors.white)),
-                    const SizedBox(width: 20),
-                    Radio<String>(
-                      value: 'employer',
-                      groupValue: userType, // Tracks the selected value
-                      onChanged: (value) {
-                        setState(() {
-                          userType = value!; // Updates state on change
-                        });
-                      },
-                      activeColor: Colors.blue[900], // Color when selected
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return "Please enter your email";
+                      if (!value.contains('@')) return "Enter a valid email";
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Password Field
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: true, 
+                    decoration: InputDecoration(
+                      hintText: "Enter Password",
+                      filled: true,
+                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.lock, color: Colors.blue),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                     ),
-                    const Text('Employer', style: TextStyle(color: Colors.white)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    // 🔹 --- START: DUMMY LOGIN LOGIC ---
-                    // This is temporary for testing before backend implementation
-                    String email = emailController.text.trim();
-                    String password = passwordController.text.trim();
-
-                    if (userType == 'jobSeeker' && email == "seeker@test.com" && password == "1234") {
-                      // Login as Job Seeker
-                      Navigator.pushReplacement(
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return "Please enter your password";
+                      if (value.length < 6) return "Password must be at least 6 characters";
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Radio Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Radio<String>(
+                        value: 'jobSeeker',
+                        groupValue: userType,
+                        onChanged: (value) {
+                          setState(() {
+                            userType = value!;
+                          });
+                        },
+                        activeColor: Colors.blue[900],
+                      ),
+                      const Text('Job Seeker', style: TextStyle(color: Colors.white)),
+                      const SizedBox(width: 20),
+                      Radio<String>(
+                        value: 'employer',
+                        groupValue: userType,
+                        onChanged: (value) {
+                          setState(() {
+                            userType = value!;
+                          });
+                        },
+                        activeColor: Colors.blue[900],
+                      ),
+                      const Text('Employer', style: TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Login Button
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _loginUser, // লোডিং হলে বাটন বন্ধ থাকবে
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[900],
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    ),
+                    child: _isLoading 
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("Login", style: TextStyle(fontSize: 18)),
+                  ),
+                  const SizedBox(height: 10),
+                  
+                  // Forgot Password Button
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => JobSeekerHomePage(
-                            email: email, // Pass email as per original structure
-                          ),
+                          builder: (context) => const PasswordRecoveryScreen(),
                         ),
                       );
-                    } else if (userType == 'employer' && email == "employer@test.com" && password == "1234") {
-                      // Login as Employer
-                      Map<String, String> dummyEmployerData = {
-                        "name": "Test Employer Inc.",
-                        "email": email,
-                        "phone": "0123456789",
-                        "father": "Mr. Employer",
-                        "presentAddress": "Dhaka",
-                        "permanentAddress": "Dhaka",
-                        "nid": "1234567890",
-                        "userType": "employer",
-                        "gender": "Other",
-                        "location": "Lat: 23.8103, Long: 90.4125"
-                        // Add imagePath if needed: "imagePath": "path/to/dummy/image.png"
-                      };
-
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EmployerHomePage(
-                            userData: dummyEmployerData, // Pass dummy data to Employer home
-                          ),
-                        ),
-                      );
-                    } else {
-                      // Incorrect credentials
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Invalid test credentials. Use 'seeker@test.com' or 'employer@test.com' and password '1234'")),
-                      );
-                    }
-                    // 🔹 --- END: DUMMY LOGIN LOGIC ---
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[900], // Button color
-                    foregroundColor: Colors.white, // Text color
-                    minimumSize: const Size(double.infinity, 50), // Full width button
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  ),
-                  child: const Text("Login", style: TextStyle(fontSize: 18)),
-                ),
-                const SizedBox(height: 10),
-                // Forgot Password Button
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PasswordRecoveryScreen(),
+                    },
+                    child: const Text(
+                      "Forgot password?",
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
                       ),
-                    );
-                  },
-                  child: const Text(
-                    "Forgot password?",
-                    style: TextStyle(
-                      color: Colors.black, // Changed color for visibility
-                      fontWeight: FontWeight.bold,
-                      decoration: TextDecoration.underline,
                     ),
                   ),
-                ),
-                const SizedBox(height: 15),
-                // Registration Button
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const RegistrationScreen(), // 'onRegister' is removed
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    "Don't have an account? Register",
-                    style: TextStyle(color: Colors.black), // Changed color for visibility
+                  const SizedBox(height: 15),
+                  
+                  // Registration Button
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const RegistrationScreen(), 
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      "Don't have an account? Register",
+                      style: TextStyle(color: Colors.black), 
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -186,20 +226,109 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// Password Recovery Screen (remains the same)
-class PasswordRecoveryScreen extends StatelessWidget {
+// ---------------------- PASSWORD RECOVERY SCREEN (UPDATED) ----------------------
+class PasswordRecoveryScreen extends StatefulWidget {
   const PasswordRecoveryScreen({super.key});
 
   @override
+  State<PasswordRecoveryScreen> createState() => _PasswordRecoveryScreenState();
+}
+
+class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
+  final TextEditingController emailController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  // পাসওয়ার্ড রিসেট ফাংশন
+  Future<void> _resetPassword() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: emailController.text.trim(),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Check your email for the password reset link!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context); // সফল হলে লগইন পেজে ফেরত যাবে
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? "Error occurred"), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // আপনার লগইন পেজের থিমের সাথে মিলিয়ে ডিজাইন করা হয়েছে
     return Scaffold(
+      backgroundColor: Colors.lightBlueAccent,
       appBar: AppBar(
-        title: const Text("Password Recovery"),
-        backgroundColor: Colors.blue[900], // Added consistent app bar color
-        foregroundColor: Colors.white, // Added text color for app bar
+        title: const Text("Reset Password"),
+        backgroundColor: Colors.blue[900], 
+        foregroundColor: Colors.white, 
       ),
-      body: const Center(
-        child: Text("Password recovery screen coming soon..."),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(25),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_reset, size: 80, color: Colors.white),
+                const SizedBox(height: 20),
+                const Text(
+                  "Enter your email to receive a reset link.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                const SizedBox(height: 30),
+                
+                TextFormField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    hintText: "Enter registered email",
+                    filled: true,
+                    fillColor: Colors.white,
+                    prefixIcon: const Icon(Icons.email, color: Colors.blue),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return "Please enter your email";
+                    if (!value.contains('@')) return "Enter a valid email";
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 25),
+                
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _resetPassword,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[900],
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  child: _isLoading 
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Send Reset Link", style: TextStyle(fontSize: 18)),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -17,12 +17,17 @@ dependencies:
   shared_preferences: ^2.2.0
   url_launcher: ^6.3.0
   provider: ^6.1.5+1
+  firebase_core: ^4.2.0
+  firebase_auth: ^6.1.1
+  cloud_firestore: ^6.0.3
+  firebase_storage: ^13.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4   # ✅ moved here
+  flutterfire_cli: ^1.3.1
 
 flutter:
   uses-material-design: true
