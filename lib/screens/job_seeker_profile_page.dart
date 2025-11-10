@@ -1,10 +1,10 @@
-import 'dart:io'; // 🔹 Import যোগ করা হয়েছে
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart'; // 🔹 Import যোগ করা হয়েছে
-import 'package:image_picker/image_picker.dart'; // 🔹 Import যোগ করা হয়েছে
-import 'package:geolocator/geolocator.dart'; // 🔹 Import যোগ করা হয়েছে
+import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 
-// --------------------------- JOB SEEKER PROFILE PAGE ---------------------------
+// --------------------------- JOB SEEKER PROFILE PAGE (FIXED) ---------------------------
 
 class JobSeekerProfilePage extends StatefulWidget {
   final Map<String, String> userData;
@@ -31,24 +31,32 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
   late TextEditingController nidController;
   late TextEditingController locationController;
 
-  String userType = "";
-  String gender = "";
+  String? gender; // Nullable করা হলো যাতে ক্র্যাশ না করে
 
   @override
   void initState() {
     super.initState();
     user = Map.from(widget.userData);
 
-    nameController = TextEditingController(text: user['name']);
-    emailController = TextEditingController(text: user['email']);
-    phoneController = TextEditingController(text: user['phone']);
-    fatherController = TextEditingController(text: user['father']);
-    presentAddressController = TextEditingController(text: user['presentAddress']);
-    permanentAddressController = TextEditingController(text: user['permanentAddress']);
-    nidController = TextEditingController(text: user['nid']);
-    locationController = TextEditingController(text: user['location']);
-    userType = user['userType'] ?? '';
-    gender = user['gender'] ?? '';
+    nameController = TextEditingController(text: user['name'] ?? "");
+    emailController = TextEditingController(text: user['email'] ?? "");
+    phoneController = TextEditingController(text: user['phone'] ?? "");
+    
+    // FIX: 'father' এর বদলে 'fatherName' ব্যবহার করা হলো
+    fatherController = TextEditingController(text: user['fatherName'] ?? user['father'] ?? ""); 
+    
+    presentAddressController = TextEditingController(text: user['presentAddress'] ?? "");
+    permanentAddressController = TextEditingController(text: user['permanentAddress'] ?? "");
+    nidController = TextEditingController(text: user['nid'] ?? "");
+    locationController = TextEditingController(text: user['location'] ?? "");
+    
+    // জেন্ডার ভ্যালু চেক করে সেট করা হচ্ছে
+    String? g = user['gender'];
+    if (g != null && ["Male", "Female", "Other"].contains(g)) {
+      gender = g;
+    } else {
+      gender = null;
+    }
   }
 
   @override
@@ -74,19 +82,25 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
   }
 
   Future<void> getCurrentLocation() async {
-    // 🔹 Note: Location permission logic টি RegistrationScreen এ আছে,
-    // এখানে শুধু getCurrentPosition কল করা হয়েছে।
-    // ভালো হয় একটি আলাদা Location Service ক্লাস তৈরি করলে।
-    try {
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      setState(() {
-        locationController.text = "Lat: ${position.latitude}, Lon: ${position.longitude}";
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Unable to fetch location")),
-      );
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enable location services')));
+      return;
     }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permission denied')));
+        return;
+      }
+    }
+
+    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    setState(() {
+      locationController.text = "Lat: ${position.latitude}, Lon: ${position.longitude}";
+    });
   }
 
   InputDecoration _inputDecoration(String hint) {
@@ -116,22 +130,21 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
   void _saveProfile() {
     setState(() {
       user['name'] = nameController.text.trim();
-      user['email'] = emailController.text.trim();
+      // user['email'] = emailController.text.trim(); // ইমেইল সাধারণত আপডেট করা হয় না
       user['phone'] = phoneController.text.trim();
-      user['father'] = fatherController.text.trim();
+      user['fatherName'] = fatherController.text.trim(); // FIX: 'fatherName'
       user['presentAddress'] = presentAddressController.text.trim();
       user['permanentAddress'] = permanentAddressController.text.trim();
       user['nid'] = nidController.text.trim();
       user['location'] = locationController.text.trim();
 
-      if (["Male", "Female", "Other"].contains(gender)) user['gender'] = gender;
+      if (gender != null) user['gender'] = gender!;
       if (_image != null) user['imagePath'] = _image!.path;
-      user['userType'] = userType;
 
       isEditing = false;
     });
 
-    widget.onUpdate(user); // 🔹 Ekhane backend e update call hobe
+    widget.onUpdate(user); // ব্যাকএন্ড আপডেট কল
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Profile updated successfully")),
@@ -142,21 +155,23 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.lightBlueAccent,
-      appBar: AppBar(title: const Text("Profile"), backgroundColor: Colors.blue[900]),
+      appBar: AppBar(title: const Text("Profile"), backgroundColor: Colors.blue[900], foregroundColor: Colors.white),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // 🔹 Profile Image
+            // Profile Image
             GestureDetector(
               onTap: isEditing ? pickImage : null,
               child: CircleAvatar(
-                radius: 50,
+                radius: 55,
                 backgroundColor: Colors.white,
                 backgroundImage: _image != null
                     ? FileImage(_image!)
-                    : (user['imagePath'] != null ? FileImage(File(user['imagePath']!)) : null),
-                child: _image == null && user['imagePath'] == null
+                    : (user['imagePath'] != null && user['imagePath']!.isNotEmpty 
+                        ? FileImage(File(user['imagePath']!)) 
+                        : null),
+                child: _image == null && (user['imagePath'] == null || user['imagePath']!.isEmpty)
                     ? const Icon(Icons.camera_alt, size: 40, color: Colors.blue)
                     : null,
               ),
@@ -172,36 +187,41 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
                 child: Column(
                   children: [
                     _buildField("Name", nameController, enabled: isEditing),
-                    _buildField("Email", emailController, enabled: isEditing),
+                    _buildField("Email", emailController, enabled: false), // ইমেইল রিড-অনলি
                     _buildField("Phone", phoneController, enabled: isEditing),
                     _buildField("Father Name", fatherController, enabled: isEditing),
                     _buildField("Present Address", presentAddressController, enabled: isEditing),
                     _buildField("Permanent Address", permanentAddressController, enabled: isEditing),
                     _buildField("NID / Birth Certificate", nidController, enabled: isEditing),
 
-                    // Location field same as registration
+                    // Location field with button
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("Location",
-                              style: GoogleFonts.poppins(
-                                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
+                              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
                           const SizedBox(height: 5),
                           Row(
                             children: [
                               Expanded(
                                 child: TextField(
                                   controller: locationController,
-                                  enabled: isEditing,
-                                  decoration: _inputDecoration("Enter Location"),
+                                  enabled: false, // লোকেশন শুধু বাটন দিয়েই নেওয়া যাবে
+                                  decoration: _inputDecoration("Location"),
                                 ),
                               ),
+                              const SizedBox(width: 10),
                               if (isEditing)
-                                IconButton(
-                                  icon: const Icon(Icons.location_on, color: Colors.blue),
+                                ElevatedButton(
                                   onPressed: getCurrentLocation,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    shape: const CircleBorder(),
+                                    padding: const EdgeInsets.all(12),
+                                  ),
+                                  child: const Icon(Icons.location_on, color: Colors.blue, size: 28),
                                 ),
                             ],
                           ),
@@ -210,7 +230,7 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
                     ),
 
                     // User Type (readonly)
-                    _buildField("User Type", TextEditingController(text: user['userType']), enabled: false),
+                    _buildField("User Type", TextEditingController(text: user['userType'] ?? "Job Seeker"), enabled: false),
 
                     // Gender dropdown
                     Padding(
@@ -219,8 +239,7 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("Gender",
-                              style: GoogleFonts.poppins(
-                                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
+                              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue[900])),
                           const SizedBox(height: 5),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -231,12 +250,13 @@ class _JobSeekerProfilePageState extends State<JobSeekerProfilePage> {
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
-                                value: ["Male", "Female", "Other"].contains(gender) ? gender : null,
+                                value: gender,
+                                hint: const Text("Select Gender"),
                                 isExpanded: true,
                                 onChanged: isEditing
                                     ? (value) {
                                         setState(() {
-                                          gender = value!;
+                                          gender = value;
                                         });
                                       }
                                     : null,

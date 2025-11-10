@@ -1,10 +1,10 @@
-import 'dart:io'; // 🔹 Import যোগ করা হয়েছে
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart'; // 🔹 Import যোগ করা হয়েছে
-import 'package:image_picker/image_picker.dart'; // 🔹 Import যোগ করা হয়েছে
-import 'package:geolocator/geolocator.dart'; // 🔹 Import যোগ করা হয়েছে
+import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 
-// --------------------------- EMPLOYER PROFILE PAGE ---------------------------
+// --------------------------- EMPLOYER PROFILE PAGE (FIXED) ---------------------------
 
 class EmployerProfilePage extends StatefulWidget {
   final Map<String, String> userData;
@@ -40,16 +40,21 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
   @override
   void initState() {
     super.initState();
+    // Firestore থেকে আসা ডেটা দিয়ে লোকাল ইউজার ম্যাপ তৈরি করা হচ্ছে
     user = Map.from(widget.userData);
 
-    nameController = TextEditingController(text: user['name']);
-    emailController = TextEditingController(text: user['email']);
-    phoneController = TextEditingController(text: user['phone']);
-    fatherController = TextEditingController(text: user['father']);
-    presentAddressController = TextEditingController(text: user['presentAddress']);
-    permanentAddressController = TextEditingController(text: user['permanentAddress']);
-    nidController = TextEditingController(text: user['nid']);
-    locationController = TextEditingController(text: user['location']);
+    // সঠিক Key ব্যবহার করে কন্ট্রোলারে ডেটা সেট করা হচ্ছে
+    nameController = TextEditingController(text: user['name'] ?? "");
+    emailController = TextEditingController(text: user['email'] ?? "");
+    phoneController = TextEditingController(text: user['phone'] ?? "");
+    
+    // FIX: 'father' এর বদলে 'fatherName' ব্যবহার করা হলো (Firestore অনুযায়ী)
+    fatherController = TextEditingController(text: user['fatherName'] ?? user['father'] ?? ""); 
+    
+    presentAddressController = TextEditingController(text: user['presentAddress'] ?? "");
+    permanentAddressController = TextEditingController(text: user['permanentAddress'] ?? "");
+    nidController = TextEditingController(text: user['nid'] ?? "");
+    locationController = TextEditingController(text: user['location'] ?? "");
     _location = user['location'] ?? "";
     selectedGender = user['gender'];
   }
@@ -129,10 +134,11 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
 
   void _saveProfile() {
     setState(() {
+      // আপডেট করার সময়ও সঠিক Key ব্যবহার করা হচ্ছে
       user['name'] = nameController.text.trim();
-      user['email'] = emailController.text.trim();
+      // user['email'] = emailController.text.trim(); // ইমেইল সাধারণত আপডেট করতে দেওয়া হয় না
       user['phone'] = phoneController.text.trim();
-      user['father'] = fatherController.text.trim();
+      user['fatherName'] = fatherController.text.trim(); // FIX: 'fatherName'
       user['presentAddress'] = presentAddressController.text.trim();
       user['permanentAddress'] = permanentAddressController.text.trim();
       user['nid'] = nidController.text.trim();
@@ -146,7 +152,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
       isEditing = false;
     });
 
-    widget.onUpdate(user); // 🔹 Ekhane backend e update call hobe
+    widget.onUpdate(user); // ব্যাকএন্ডে আপডেট কল
 
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text("Profile updated successfully")));
@@ -159,6 +165,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
       appBar: AppBar(
         title: const Text("Profile"),
         backgroundColor: Colors.blue[900],
+        foregroundColor: Colors.white, // AppBar টেক্সট সাদা করার জন্য
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -172,10 +179,10 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                 backgroundColor: Colors.white,
                 backgroundImage: _image != null
                     ? FileImage(_image!)
-                    : (user['imagePath'] != null
+                    : (user['imagePath'] != null && user['imagePath']!.isNotEmpty
                         ? FileImage(File(user['imagePath']!))
                         : null),
-                child: _image == null && user['imagePath'] == null
+                child: _image == null && (user['imagePath'] == null || user['imagePath']!.isEmpty)
                     ? const Icon(Icons.camera_alt, size: 40, color: Colors.blue)
                     : null,
               ),
@@ -190,14 +197,14 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                 child: Column(
                   children: [
                     _buildField("Name", nameController, enabled: isEditing),
-                    _buildField("Email", emailController, enabled: isEditing),
+                    _buildField("Email", emailController, enabled: false), // ইমেইল এডিট বন্ধ রাখা ভালো
                     _buildField("Phone", phoneController, enabled: isEditing),
                     _buildField("Father Name", fatherController, enabled: isEditing),
                     _buildField("Present Address", presentAddressController, enabled: isEditing),
                     _buildField("Permanent Address", permanentAddressController, enabled: isEditing),
                     _buildField("NID / Birth Certificate", nidController, enabled: isEditing),
 
-                    // Location field like registration screen
+                    // Location field
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Column(
@@ -214,7 +221,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                               Expanded(
                                 child: TextField(
                                   controller: locationController,
-                                  enabled: false,
+                                  enabled: false, // লোকেশন শুধু বাটন দিয়েই নেওয়া যাবে
                                   decoration: _inputDecoration("Location"),
                                 ),
                               ),
@@ -238,7 +245,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
 
                     // User Type (readonly)
                     _buildField("User Type",
-                        TextEditingController(text: user['userType']), enabled: false),
+                        TextEditingController(text: user['userType'] ?? "Employer"), enabled: false),
 
                     // Gender dropdown
                     Padding(
@@ -266,6 +273,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> {
                                     ? selectedGender
                                     : null,
                                 isExpanded: true,
+                                hint: const Text("Select Gender"), // হিন্ট যোগ করা হলো
                                 onChanged: isEditing
                                     ? (value) {
                                         setState(() {
