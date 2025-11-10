@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-// Firebase প্যাকেজ
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'registration_screen.dart'; 
-import 'job_seeker_home_page.dart'; 
-import 'employer_home_page.dart'; 
+import 'registration_screen.dart';
+import 'job_seeker_home_page.dart';
+import 'employer_home_page.dart';
+import 'admin_dashboard.dart';
 
-// ---------------------- LOGIN SCREEN ----------------------
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -16,31 +15,45 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // ফর্ম ভ্যালিডেশন এবং লোডিং-এর জন্য ভেরিয়েবল
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  String userType = 'jobSeeker'; 
+  String userType = 'jobSeeker';
 
-  // --- আসল Firebase লগইন ফাংশন ---
   Future<void> _loginUser() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (userType == 'admin') {
+      if (emailController.text.trim() == 'admin@worknest.com' &&
+          passwordController.text.trim() == 'admin1234') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminDashboard()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Invalid Admin Credentials"),
+              backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
-      // ১. Firebase Auth দিয়ে ইমেইল/পাসওয়ার্ড চেক
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
+      UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+              email: emailController.text.trim(),
+              password: passwordController.text.trim());
 
-      // ২. সফল হলে Firestore থেকে ইউজার ডেটা আনা
       if (userCredential.user != null) {
         String uid = userCredential.user!.uid;
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        DocumentSnapshot userDoc =
+            await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
         if (!userDoc.exists) {
           throw Exception("User data not found in Database!");
@@ -49,31 +62,41 @@ class _LoginScreenState extends State<LoginScreen> {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
         String actualUserType = userData['userType'] ?? 'jobSeeker';
 
-        // ৩. ইউজার রোল (Role) চেক করা
         if (userType != actualUserType) {
-          await FirebaseAuth.instance.signOut(); // ভুল রোল হলে লগআউট করে দেওয়া
+          await FirebaseAuth.instance.signOut();
           throw Exception("Account type mismatch! You are a $actualUserType.");
         }
 
-        // ৪. সঠিক হোম পেজে পাঠানো
         if (mounted) {
           if (actualUserType == 'employer') {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => EmployerHomePage(userData: userData.map((k, v) => MapEntry(k, v.toString())))),
+              MaterialPageRoute(
+                  builder: (context) => EmployerHomePage(
+                      userData: userData
+                          .map((k, v) => MapEntry(k, v.toString())))),
             );
           } else {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => JobSeekerHomePage(email: userData['email'])),
+              MaterialPageRoute(
+                  builder: (context) =>
+                      JobSeekerHomePage(email: userData['email'])),
             );
           }
         }
       }
     } on FirebaseAuthException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login Failed: ${e.message}"), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Login Failed: ${e.message}"),
+            backgroundColor: Colors.red));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString()), backgroundColor: Colors.red));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -87,16 +110,14 @@ class _LoginScreenState extends State<LoginScreen> {
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(20),
-            // Form উইজেট দিয়ে র‍্যাপ করা হলো
             child: Form(
               key: _formKey,
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center, 
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset("assets/images/WN_logo.png", width: 250, height: 250),
+                  Image.asset("assets/images/WN_logo.png",
+                      width: 250, height: 250),
                   const SizedBox(height: 30),
-                  
-                  // Email Field (TextFormField ব্যবহার করা হয়েছে ভ্যালিডেশনের জন্য)
                   TextFormField(
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -105,82 +126,91 @@ class _LoginScreenState extends State<LoginScreen> {
                       filled: true,
                       fillColor: Colors.white,
                       prefixIcon: const Icon(Icons.email, color: Colors.blue),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15)),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return "Please enter your email";
+                      if (value == null || value.isEmpty)
+                        return "Please enter your email";
                       if (!value.contains('@')) return "Enter a valid email";
                       return null;
                     },
                   ),
                   const SizedBox(height: 20),
-                  
-                  // Password Field
                   TextFormField(
                     controller: passwordController,
-                    obscureText: true, 
+                    obscureText: true,
                     decoration: InputDecoration(
                       hintText: "Enter Password",
                       filled: true,
                       fillColor: Colors.white,
                       prefixIcon: const Icon(Icons.lock, color: Colors.blue),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15)),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return "Please enter your password";
-                      if (value.length < 6) return "Password must be at least 6 characters";
+                      if (value == null || value.isEmpty)
+                        return "Please enter your password";
+                      if (value.length < 6)
+                        return "Password must be at least 6 characters";
                       return null;
                     },
                   ),
                   const SizedBox(height: 20),
-                  
-                  // Radio Buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Radio<String>(
-                        value: 'jobSeeker',
-                        groupValue: userType,
-                        onChanged: (value) {
-                          setState(() {
-                            userType = value!;
-                          });
-                        },
-                        activeColor: Colors.blue[900],
-                      ),
-                      const Text('Job Seeker', style: TextStyle(color: Colors.white)),
-                      const SizedBox(width: 20),
-                      Radio<String>(
-                        value: 'employer',
-                        groupValue: userType,
-                        onChanged: (value) {
-                          setState(() {
-                            userType = value!;
-                          });
-                        },
-                        activeColor: Colors.blue[900],
-                      ),
-                      const Text('Employer', style: TextStyle(color: Colors.white)),
-                    ],
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Radio<String>(
+                          value: 'jobSeeker',
+                          groupValue: userType,
+                          onChanged: (value) =>
+                              setState(() => userType = value!),
+                          activeColor: Colors.blue[900],
+                        ),
+                        const Text('Job Seeker',
+                            style: TextStyle(color: Colors.white)),
+                        const SizedBox(width: 10),
+                        Radio<String>(
+                          value: 'employer',
+                          groupValue: userType,
+                          onChanged: (value) =>
+                              setState(() => userType = value!),
+                          activeColor: Colors.blue[900],
+                        ),
+                        const Text('Employer',
+                            style: TextStyle(color: Colors.white)),
+                        const SizedBox(width: 10),
+                        Radio<String>(
+                          value: 'admin',
+                          groupValue: userType,
+                          onChanged: (value) =>
+                              setState(() => userType = value!),
+                          activeColor: Colors.redAccent,
+                        ),
+                        const Text('Admin',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  
-                  // Login Button
                   ElevatedButton(
-                    onPressed: _isLoading ? null : _loginUser, // লোডিং হলে বাটন বন্ধ থাকবে
+                    onPressed: _isLoading ? null : _loginUser,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue[900],
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15)),
                     ),
-                    child: _isLoading 
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("Login", style: TextStyle(fontSize: 18)),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("Login", style: TextStyle(fontSize: 18)),
                   ),
                   const SizedBox(height: 10),
-                  
-                  // Forgot Password Button
                   GestureDetector(
                     onTap: () {
                       Navigator.push(
@@ -200,20 +230,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 15),
-                  
-                  // Registration Button
                   TextButton(
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const RegistrationScreen(), 
+                          builder: (context) => const RegistrationScreen(),
                         ),
                       );
                     },
                     child: const Text(
                       "Don't have an account? Register",
-                      style: TextStyle(color: Colors.black), 
+                      style: TextStyle(color: Colors.black),
                     ),
                   ),
                 ],
@@ -226,7 +254,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ---------------------- PASSWORD RECOVERY SCREEN (UPDATED) ----------------------
 class PasswordRecoveryScreen extends StatefulWidget {
   const PasswordRecoveryScreen({super.key});
 
@@ -239,7 +266,6 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
-  // পাসওয়ার্ড রিসেট ফাংশন
   Future<void> _resetPassword() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -257,11 +283,13 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.pop(context); // সফল হলে লগইন পেজে ফেরত যাবে
+      Navigator.pop(context);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? "Error occurred"), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text(e.message ?? "Error occurred"),
+            backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -270,13 +298,12 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // আপনার লগইন পেজের থিমের সাথে মিলিয়ে ডিজাইন করা হয়েছে
     return Scaffold(
       backgroundColor: Colors.lightBlueAccent,
       appBar: AppBar(
         title: const Text("Reset Password"),
-        backgroundColor: Colors.blue[900], 
-        foregroundColor: Colors.white, 
+        backgroundColor: Colors.blue[900],
+        foregroundColor: Colors.white,
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -294,7 +321,6 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                   style: TextStyle(color: Colors.white, fontSize: 16),
                 ),
                 const SizedBox(height: 30),
-                
                 TextFormField(
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -303,27 +329,30 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                     filled: true,
                     fillColor: Colors.white,
                     prefixIcon: const Icon(Icons.email, color: Colors.blue),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15)),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return "Please enter your email";
+                    if (value == null || value.isEmpty)
+                      return "Please enter your email";
                     if (!value.contains('@')) return "Enter a valid email";
                     return null;
                   },
                 ),
                 const SizedBox(height: 25),
-                
                 ElevatedButton(
                   onPressed: _isLoading ? null : _resetPassword,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue[900],
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15)),
                   ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Send Reset Link", style: TextStyle(fontSize: 18)),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("Send Reset Link",
+                          style: TextStyle(fontSize: 18)),
                 ),
               ],
             ),
