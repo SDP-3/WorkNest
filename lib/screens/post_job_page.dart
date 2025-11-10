@@ -25,14 +25,20 @@ class _PostJobPageState extends State<PostJobPage> {
   bool _isLoading = false; // লোডিং ইন্ডিকেটর দেখানোর জন্য
 
   final List<String> _jobCategories = const [
-    "Driver", "Maid / House Helper", "Security Guard", "Delivery Person",
-    "Electrician", "Plumber", "Carpenter", "Painter", "Cook / Chef",
-    "Cleaner", "Others",
+    "Driver",
+    "Maid / House Helper",
+    "Security Guard",
+    "Delivery Person",
+    "Electrician",
+    "Plumber",
+    "Carpenter",
+    "Painter",
+    "Cook / Chef",
+    "Cleaner",
+    "Others",
   ];
 
-  final List<String> _jobTypes = const [
-    "Full-time", "Part-time",
-  ];
+  final List<String> _jobTypes = const ["Full-time", "Part-time"];
 
   @override
   void dispose() {
@@ -53,8 +59,9 @@ class _PostJobPageState extends State<PostJobPage> {
         salaryController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("Please fill all required fields"),
-            backgroundColor: Colors.redAccent),
+          content: Text("Please fill all required fields"),
+          backgroundColor: Colors.redAccent,
+        ),
       );
       return;
     }
@@ -82,15 +89,17 @@ class _PostJobPageState extends State<PostJobPage> {
         "requirements": requirementsController.text.trim(),
         "job_type": jobType,
         "posted_at": FieldValue.serverTimestamp(), // সার্ভারের সময়
-        "posted_by_uid": user.uid, // ইউজারের UID (My Jobs ফিল্টার করার জন্য জরুরি)
+        "posted_by_uid":
+            user.uid, // ইউজারের UID (My Jobs ফিল্টার করার জন্য জরুরি)
       });
 
       // ৪. সফল হলে মেসেজ দেখানো ও ফর্ম ক্লিয়ার করা
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("Job Posted Successfully!"),
-            backgroundColor: Colors.green),
+          content: Text("Job Posted Successfully!"),
+          backgroundColor: Colors.green,
+        ),
       );
 
       setState(() {
@@ -106,7 +115,6 @@ class _PostJobPageState extends State<PostJobPage> {
 
       // চাইলে এখানে অটোমেটিক My Jobs পেজে নিয়ে যাওয়া যায়:
       // Navigator.push(context, MaterialPageRoute(builder: (context) => const MyPostedJobsPage()));
-
     } catch (e) {
       // ৫. কোনো এরর হলে দেখানো
       setState(() {
@@ -115,8 +123,9 @@ class _PostJobPageState extends State<PostJobPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text("Error posting job: ${e.toString()}"),
-            backgroundColor: Colors.redAccent),
+          content: Text("Error posting job: ${e.toString()}"),
+          backgroundColor: Colors.redAccent,
+        ),
       );
     }
   }
@@ -148,8 +157,11 @@ class _PostJobPageState extends State<PostJobPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<String>(
-              value: jobCategory,
-              decoration: _inputDecoration("Job Category", icon: Icons.category_rounded),
+              initialValue: jobCategory,
+              decoration: _inputDecoration(
+                "Job Category",
+                icon: Icons.category_rounded,
+              ),
               items: _jobCategories.map((String category) {
                 return DropdownMenuItem<String>(
                   value: category,
@@ -162,26 +174,38 @@ class _PostJobPageState extends State<PostJobPage> {
             const SizedBox(height: 15),
             TextField(
               controller: titleController,
-              decoration: _inputDecoration("Job Title", icon: Icons.title_rounded),
+              decoration: _inputDecoration(
+                "Job Title",
+                icon: Icons.title_rounded,
+              ),
               style: GoogleFonts.poppins(fontSize: 16),
             ),
             const SizedBox(height: 15),
             TextField(
               controller: locationController,
-              decoration: _inputDecoration("Location", icon: Icons.location_on_rounded),
+              decoration: _inputDecoration(
+                "Location",
+                icon: Icons.location_on_rounded,
+              ),
               style: GoogleFonts.poppins(fontSize: 16),
             ),
             const SizedBox(height: 15),
             TextField(
               controller: salaryController,
-              decoration: _inputDecoration("Salary (e.g., 15000 BDT/month)", icon: Icons.attach_money_rounded),
+              decoration: _inputDecoration(
+                "Salary (e.g., 15000 BDT/month)",
+                icon: Icons.attach_money_rounded,
+              ),
               keyboardType: TextInputType.text,
               style: GoogleFonts.poppins(fontSize: 16),
             ),
             const SizedBox(height: 15),
             DropdownButtonFormField<String>(
-              value: jobType,
-              decoration: _inputDecoration("Job Type", icon: Icons.timer_rounded),
+              initialValue: jobType,
+              decoration: _inputDecoration(
+                "Job Type",
+                icon: Icons.timer_rounded,
+              ),
               items: _jobTypes.map((String type) {
                 return DropdownMenuItem<String>(
                   value: type,
@@ -195,28 +219,36 @@ class _PostJobPageState extends State<PostJobPage> {
             TextField(
               controller: descriptionController,
               maxLines: 4,
-              decoration: _inputDecoration("Job Description", icon: Icons.description_rounded)
-                  .copyWith(alignLabelWithHint: true),
+              decoration: _inputDecoration(
+                "Job Description",
+                icon: Icons.description_rounded,
+              ).copyWith(alignLabelWithHint: true),
               style: GoogleFonts.poppins(fontSize: 16),
             ),
             const SizedBox(height: 15),
             TextField(
               controller: requirementsController,
               maxLines: 4,
-              decoration: _inputDecoration("Requirements", icon: Icons.checklist_rounded)
-                  .copyWith(alignLabelWithHint: true),
+              decoration: _inputDecoration(
+                "Requirements",
+                icon: Icons.checklist_rounded,
+              ).copyWith(alignLabelWithHint: true),
               style: GoogleFonts.poppins(fontSize: 16),
             ),
             const SizedBox(height: 30),
 
             // ---------- POST JOB BUTTON (With Loading State) ----------
             ElevatedButton(
-              onPressed: _isLoading ? null : _postJob, // লোডিং অবস্থায় বাটন ডিজেবল থাকবে
+              onPressed: _isLoading
+                  ? null
+                  : _postJob, // লোডিং অবস্থায় বাটন ডিজেবল থাকবে
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[900],
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 elevation: 3,
               ),
@@ -224,12 +256,17 @@ class _PostJobPageState extends State<PostJobPage> {
                   ? const SizedBox(
                       height: 24,
                       width: 24,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
                     )
                   : Text(
                       "Post Job",
                       style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.bold, fontSize: 17),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
                     ),
             ),
 
@@ -240,14 +277,18 @@ class _PostJobPageState extends State<PostJobPage> {
                 // এখানে সরাসরি নতুন পেজে নেভিগেট করা হচ্ছে
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const MyPostedJobsPage()),
+                  MaterialPageRoute(
+                    builder: (context) => const MyPostedJobsPage(),
+                  ),
                 );
               },
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.blue[900],
                 side: BorderSide(color: Colors.blue[900]!, width: 1.5),
                 minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: Text(

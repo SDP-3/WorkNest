@@ -28,18 +28,23 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController fatherController = TextEditingController();
-  final TextEditingController presentAddressController = TextEditingController();
-  final TextEditingController permanentAddressController = TextEditingController();
+  final TextEditingController presentAddressController =
+      TextEditingController();
+  final TextEditingController permanentAddressController =
+      TextEditingController();
   final TextEditingController nidController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
 
   String? userType;
   String? gender;
 
   // --- ইমেজ পিকার ফাংশন ---
   Future<void> pickImage() async {
-    final XFile? pickedImage = await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? pickedImage = await _picker.pickImage(
+      source: ImageSource.gallery,
+    );
     if (pickedImage != null) {
       setState(() {
         _image = File(pickedImage.path);
@@ -49,13 +54,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   // --- লোকেশন পিকার ফাংশন ---
   Future<void> getUserLocation() async {
-    setState(() { _isLoading = true; });
-    
+    setState(() {
+      _isLoading = true;
+    });
+
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enable location services')));
-      setState(() { _isLoading = false; });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enable location services')));
+      setState(() {
+        _isLoading = false;
+      });
       return;
     }
 
@@ -64,17 +75,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permission denied')));
-        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission denied')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
         return;
       }
     }
 
-    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
     setState(() {
       _location = "Lat: ${position.latitude}, Long: ${position.longitude}";
       _isLoading = false;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location Captured!')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Location Captured!')));
     });
   }
 
@@ -88,19 +107,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide(color: Colors.white, width: 0.0)
+        borderSide: BorderSide(color: Colors.white, width: 0.0),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide(color: Colors.blue[900]!, width: 2.0)
+        borderSide: BorderSide(color: Colors.blue[900]!, width: 2.0),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide(color: Colors.red, width: 1.0)
+        borderSide: BorderSide(color: Colors.red, width: 1.0),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide(color: Colors.red, width: 2.0)
+        borderSide: BorderSide(color: Colors.red, width: 2.0),
       ),
     );
   }
@@ -113,7 +132,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide(color: Colors.white, width: 0.0)
+        borderSide: BorderSide(color: Colors.white, width: 0.0),
       ),
       prefixIcon: const Icon(Icons.person_outline, color: Colors.blue),
     );
@@ -124,7 +143,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     // ধাপ ক: ফর্ম ভ্যালিড কি না চেক করুন
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill all required fields correctly"))
+        const SnackBar(
+          content: Text("Please fill all required fields correctly"),
+        ),
       );
       return;
     }
@@ -132,7 +153,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     // ধাপ খ: পাসওয়ার্ড ম্যাচিং চেক
     String password = passwordController.text.trim();
     if (password != confirmPasswordController.text.trim()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Passwords do not match")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Passwords do not match")));
       return;
     }
 
@@ -143,15 +166,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     try {
       // ধাপ ঘ: FirebaseAuth-এ ইউজার তৈরি করুন
-      UserCredential userCredential = 
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: password,
-      );
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: emailController.text.trim(),
+            password: password,
+          );
 
       String uid = userCredential.user!.uid;
       String? imageUrl;
-      
+
       // TODO: এখানে ছবি Firebase Storage-এ আপলোড করতে হবে
       // এবং imageUrl = await storageRef.getDownloadURL(); দিয়ে URL নিতে হবে।
       // আপাতত শুধু লোকাল পাথ সেভ করা হচ্ছে, যা ঠিক নয়।
@@ -170,7 +193,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         'permanentAddress': permanentAddressController.text.trim(),
         'nid': nidController.text.trim(),
         'userType': userType, // 'jobSeeker' or 'employer'
-        'gender': gender,     // 'Male', 'Female', 'Other'
+        'gender': gender, // 'Male', 'Female', 'Other'
         'location': _location, // Lat, Long string
         'imageUrl': imageUrl, // ছবির URL
         'createdAt': FieldValue.serverTimestamp(),
@@ -179,26 +202,28 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       // ধাপ চ: সফল হলে লগইন পেজে ফেরত যান
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Registration Successful! Please log in."))
+        const SnackBar(
+          content: Text("Registration Successful! Please log in."),
+        ),
       );
       Navigator.pop(context); // রেজিস্ট্রেশন পেজ বন্ধ করে লগইন পেজে ফেরত যাবে
-
     } on FirebaseAuthException catch (e) {
       // যদি Firebase কোনো एरর দেয় (যেমন: ইমেইল আগেই ব্যবহৃত)
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Registration Failed: ${e.message}"))
+        SnackBar(content: Text("Registration Failed: ${e.message}")),
       );
     } catch (e) {
       // অন্য কোনো एरর হলে
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("An unknown error occurred: $e"))
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("An unknown error occurred: $e")));
     }
 
     // ধাপ ছ: লোডিং শেষ করুন
-    if (mounted) { // উইজেটটি তখনো স্ক্রিনে আছে কি না তা চেক করে
+    if (mounted) {
+      // উইজেটটি তখনো স্ক্রিনে আছে কি না তা চেক করে
       setState(() {
         _isLoading = false;
       });
@@ -225,14 +250,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     backgroundColor: Colors.white,
                     backgroundImage: _image != null ? FileImage(_image!) : null,
                     child: _image == null
-                        ? const Icon(Icons.camera_alt, size: 40, color: Colors.blue)
+                        ? const Icon(
+                            Icons.camera_alt,
+                            size: 40,
+                            color: Colors.blue,
+                          )
                         : null,
                   ),
                 ),
                 const SizedBox(height: 20),
 
                 // --- TextFormField-গুলো ---
-
                 TextFormField(
                   controller: nameController,
                   decoration: _inputDecoration("Name", Icons.person),
@@ -245,7 +273,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: emailController,
                   decoration: _inputDecoration("Email", Icons.email),
@@ -255,7 +283,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
                     }
-                    bool emailValid = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(value);
+                    bool emailValid = RegExp(
+                      r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
+                    ).hasMatch(value);
                     if (!emailValid) {
                       return 'Please enter a valid email address';
                     }
@@ -263,7 +293,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: phoneController,
                   decoration: _inputDecoration("Phone", Icons.phone),
@@ -273,7 +303,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your mobile number';
                     }
-                    bool mobileValid = RegExp(r"^01[3-9]\d{8}$").hasMatch(value);
+                    bool mobileValid = RegExp(
+                      r"^01[3-9]\d{8}$",
+                    ).hasMatch(value);
                     if (!mobileValid) {
                       return 'Please enter a valid 11-digit Bangladeshi number (01...)';
                     }
@@ -281,28 +313,40 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: fatherController,
-                  decoration: _inputDecoration("Father Name", Icons.person_outline),
+                  decoration: _inputDecoration(
+                    "Father Name",
+                    Icons.person_outline,
+                  ),
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: presentAddressController,
-                  decoration: _inputDecoration("Present Address", Icons.location_on_outlined),
+                  decoration: _inputDecoration(
+                    "Present Address",
+                    Icons.location_on_outlined,
+                  ),
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: permanentAddressController,
-                  decoration: _inputDecoration("Permanent Address", Icons.location_city),
+                  decoration: _inputDecoration(
+                    "Permanent Address",
+                    Icons.location_city,
+                  ),
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: nidController,
-                  decoration: _inputDecoration("NID / Birth Certificate", Icons.badge),
+                  decoration: _inputDecoration(
+                    "NID / Birth Certificate",
+                    Icons.badge,
+                  ),
                   keyboardType: TextInputType.number,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: (value) {
@@ -320,7 +364,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: passwordController,
                   obscureText: true,
@@ -337,11 +381,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 15),
-                
+
                 TextFormField(
                   controller: confirmPasswordController,
                   obscureText: true,
-                  decoration: _inputDecoration("Confirm Password", Icons.lock_outline),
+                  decoration: _inputDecoration(
+                    "Confirm Password",
+                    Icons.lock_outline,
+                  ),
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -354,31 +401,47 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 15),
-                
+
                 DropdownButtonFormField<String>(
-                  value: userType,
+                  initialValue: userType,
                   items: const [
-                    DropdownMenuItem(value: "jobSeeker", child: Text("Job Seeker")),
-                    DropdownMenuItem(value: "employer", child: Text("Employer")),
+                    DropdownMenuItem(
+                      value: "jobSeeker",
+                      child: Text("Job Seeker"),
+                    ),
+                    DropdownMenuItem(
+                      value: "employer",
+                      child: Text("Employer"),
+                    ),
                   ],
-                  onChanged: (value) { setState(() { userType = value; }); },
+                  onChanged: (value) {
+                    setState(() {
+                      userType = value;
+                    });
+                  },
                   decoration: _inputDecorationDropdown("Select User Type"),
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  validator: (value) => value == null ? 'Please select a user type' : null,
+                  validator: (value) =>
+                      value == null ? 'Please select a user type' : null,
                 ),
                 const SizedBox(height: 15),
-                
+
                 DropdownButtonFormField<String>(
-                  value: gender,
+                  initialValue: gender,
                   items: const [
                     DropdownMenuItem(value: "Male", child: Text("Male")),
                     DropdownMenuItem(value: "Female", child: Text("Female")),
                     DropdownMenuItem(value: "Other", child: Text("Other")),
                   ],
-                  onChanged: (value) { setState(() { gender = value; }); },
+                  onChanged: (value) {
+                    setState(() {
+                      gender = value;
+                    });
+                  },
                   decoration: _inputDecorationDropdown("Select Gender"),
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  validator: (value) => value == null ? 'Please select your gender' : null,
+                  validator: (value) =>
+                      value == null ? 'Please select your gender' : null,
                 ),
                 const SizedBox(height: 15),
 
@@ -400,11 +463,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 if (_location.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: Text("Location Captured!", style: TextStyle(color: Colors.blue[900])),
+                    child: Text(
+                      "Location Captured!",
+                      style: TextStyle(color: Colors.blue[900]),
+                    ),
                   ),
 
                 const SizedBox(height: 20),
-                
+
                 // --- রেজিস্টার বাটন ---
                 ElevatedButton(
                   onPressed: _isLoading ? null : _registerUser,
@@ -412,9 +478,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     backgroundColor: Colors.blue[900],
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                   ),
-                  child: _isLoading 
+                  child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text("Register", style: TextStyle(fontSize: 18)),
                 ),

@@ -21,7 +21,10 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
     return Scaffold(
       backgroundColor: Colors.lightBlueAccent, // Background color
       appBar: AppBar(
-        title: Text("Job Applications", style: GoogleFonts.poppins()), // Consistent font
+        title: Text(
+          "Job Applications",
+          style: GoogleFonts.poppins(),
+        ), // Consistent font
         backgroundColor: Colors.blue[900],
         foregroundColor: Colors.white,
         elevation: 0,
@@ -33,7 +36,10 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
             ? Center(
                 child: Text(
                   "No applications received yet.",
-                  style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70),
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: Colors.white70,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               )
@@ -44,7 +50,8 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                   final application = jobApplications[index];
                   Color statusColor;
                   IconData statusIcon;
-                  String statusText = application['status'] ?? "Pending"; // Default to Pending
+                  String statusText =
+                      application['status'] ?? "Pending"; // Default to Pending
 
                   // Determine color and icon based on status
                   switch (statusText.toLowerCase()) {
@@ -60,14 +67,16 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                     default: // Pending or unknown
                       statusColor = Colors.orange[700]!;
                       statusIcon = Icons.hourglass_empty_outlined;
-                      statusText = "Pending"; // Ensure display text is consistent
+                      statusText =
+                          "Pending"; // Ensure display text is consistent
                   }
 
                   // Card UI for each application
                   return Card(
                     elevation: 4,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15)),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                     margin: const EdgeInsets.symmetric(vertical: 10),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -78,7 +87,9 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                           Text(
                             application['jobTitle'] ?? "N/A",
                             style: GoogleFonts.poppins(
-                                fontSize: 18, fontWeight: FontWeight.bold),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 8),
 
@@ -87,7 +98,8 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               // Applicant Name
-                              Expanded( // Allow name to wrap if long
+                              Expanded(
+                                // Allow name to wrap if long
                                 child: Text(
                                   "Applicant: ${application['applicantName'] ?? 'N/A'}",
                                   style: GoogleFonts.poppins(fontSize: 16),
@@ -97,26 +109,32 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                               const SizedBox(width: 10),
                               // Status Display
                               Row(
-                                mainAxisSize: MainAxisSize.min, // Prevent row from taking full width
+                                mainAxisSize: MainAxisSize
+                                    .min, // Prevent row from taking full width
                                 children: [
-                                   Icon(statusIcon, color: statusColor, size: 20),
-                                   const SizedBox(width: 4),
-                                   Text(
+                                  Icon(
+                                    statusIcon,
+                                    color: statusColor,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
                                     statusText,
                                     style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.bold,
-                                        color: statusColor,
-                                        fontSize: 15), // Slightly smaller status font
-                                   ),
+                                      fontWeight: FontWeight.bold,
+                                      color: statusColor,
+                                      fontSize: 15,
+                                    ), // Slightly smaller status font
+                                  ),
                                 ],
                               ),
                             ],
                           ),
                           const SizedBox(height: 12), // Increased spacing
-
                           // Row with Action Buttons (Details, Approve/Decline/CCR Call)
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.end, // Align buttons to the right
+                            mainAxisAlignment: MainAxisAlignment
+                                .end, // Align buttons to the right
                             children: [
                               // Details Button
                               OutlinedButton(
@@ -125,32 +143,80 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                                     context: context,
                                     builder: (context) {
                                       // Default values for safety
-                                      final email = application['email'] ?? 'N/A';
-                                      final phone = application['phone'] ?? 'N/A';
-                                      final father = application['father'] ?? 'N/A';
-                                      final presentAddress = application['presentAddress'] ?? 'N/A';
-                                      final permanentAddress = application['permanentAddress'] ?? 'N/A';
+                                      final email =
+                                          application['email'] ?? 'N/A';
+                                      final phone =
+                                          application['phone'] ?? 'N/A';
+                                      final father =
+                                          application['father'] ?? 'N/A';
+                                      final presentAddress =
+                                          application['presentAddress'] ??
+                                          'N/A';
+                                      final permanentAddress =
+                                          application['permanentAddress'] ??
+                                          'N/A';
                                       final nid = application['nid'] ?? 'N/A';
-                                      final gender = application['gender'] ?? 'N/A';
-                                      final location = application['location'] ?? 'N/A';
-                                      final bio = application['bio'] ?? 'No bio provided.';
+                                      final gender =
+                                          application['gender'] ?? 'N/A';
+                                      final location =
+                                          application['location'] ?? 'N/A';
+                                      final bio =
+                                          application['bio'] ??
+                                          'No bio provided.';
 
                                       return AlertDialog(
-                                        title: Text(application['applicantName'] ?? 'Applicant Details', style: GoogleFonts.poppins()), // Add font
+                                        title: Text(
+                                          application['applicantName'] ??
+                                              'Applicant Details',
+                                          style: GoogleFonts.poppins(),
+                                        ), // Add font
                                         content: SingleChildScrollView(
-                                          child: ListBody( // Use ListBody for better structure
+                                          child: ListBody(
+                                            // Use ListBody for better structure
                                             children: <Widget>[
-                                              _buildDetailRow("Email:", email), // Use helper
-                                              _buildDetailRow("Phone:", phone), // Use helper
-                                              _buildDetailRow("Father:", father), // Use helper
-                                              _buildDetailRow("Present Addr:", presentAddress), // Use helper
-                                              _buildDetailRow("Permanent Addr:", permanentAddress), // Use helper
-                                              _buildDetailRow("NID:", nid), // Use helper
-                                              _buildDetailRow("Gender:", gender), // Use helper
-                                              _buildDetailRow("Location:", location), // Use helper
+                                              _buildDetailRow(
+                                                "Email:",
+                                                email,
+                                              ), // Use helper
+                                              _buildDetailRow(
+                                                "Phone:",
+                                                phone,
+                                              ), // Use helper
+                                              _buildDetailRow(
+                                                "Father:",
+                                                father,
+                                              ), // Use helper
+                                              _buildDetailRow(
+                                                "Present Addr:",
+                                                presentAddress,
+                                              ), // Use helper
+                                              _buildDetailRow(
+                                                "Permanent Addr:",
+                                                permanentAddress,
+                                              ), // Use helper
+                                              _buildDetailRow(
+                                                "NID:",
+                                                nid,
+                                              ), // Use helper
+                                              _buildDetailRow(
+                                                "Gender:",
+                                                gender,
+                                              ), // Use helper
+                                              _buildDetailRow(
+                                                "Location:",
+                                                location,
+                                              ), // Use helper
                                               const SizedBox(height: 8),
-                                              Text("Bio:", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                                              Text(bio, style: GoogleFonts.poppins()),
+                                              Text(
+                                                "Bio:",
+                                                style: GoogleFonts.poppins(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Text(
+                                                bio,
+                                                style: GoogleFonts.poppins(),
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -158,16 +224,25 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                                           TextButton(
                                             onPressed: () =>
                                                 Navigator.pop(context),
-                                            child: Text("Close", style: GoogleFonts.poppins()), // Add font
-                                          )
+                                            child: Text(
+                                              "Close",
+                                              style: GoogleFonts.poppins(),
+                                            ), // Add font
+                                          ),
                                         ],
                                       );
                                     },
                                   );
                                 },
-                                child: Text("Details", style: GoogleFonts.poppins()),
                                 style: OutlinedButton.styleFrom(
-                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Padding
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ), // Padding
+                                ),
+                                child: Text(
+                                  "Details",
+                                  style: GoogleFonts.poppins(),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -179,22 +254,30 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                                   onPressed: () {
                                     // TODO: Add backend logic to update status to 'Approved'
                                     setState(() {
-                                      application['status'] = 'Approved'; // Update UI immediately
+                                      application['status'] =
+                                          'Approved'; // Update UI immediately
                                     });
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                          content: Text(
-                                              "${application['applicantName']} approved! CCR will contact."), // Updated message
-                                          backgroundColor: Colors.green,
+                                        content: Text(
+                                          "${application['applicantName']} approved! CCR will contact.",
+                                        ), // Updated message
+                                        backgroundColor: Colors.green,
                                       ),
                                     );
                                   },
                                   style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                   ),
-                                  child: Text("Approve", style: GoogleFonts.poppins()),
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "Approve",
+                                    style: GoogleFonts.poppins(),
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 // Decline Button
@@ -202,22 +285,30 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                                   onPressed: () {
                                     // TODO: Add backend logic to update status to 'Declined'
                                     setState(() {
-                                      application['status'] = 'Declined'; // Update UI immediately
+                                      application['status'] =
+                                          'Declined'; // Update UI immediately
                                     });
-                                     ScaffoldMessenger.of(context).showSnackBar(
+                                    ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                          content: Text(
-                                              "${application['applicantName']}'s application declined."),
-                                          backgroundColor: Colors.redAccent,
+                                        content: Text(
+                                          "${application['applicantName']}'s application declined.",
+                                        ),
+                                        backgroundColor: Colors.redAccent,
                                       ),
                                     );
                                   },
                                   style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.redAccent,
-                                      foregroundColor: Colors.white,
-                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                   ),
-                                  child: Text("Decline", style: GoogleFonts.poppins()),
+                                    backgroundColor: Colors.redAccent,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "Decline",
+                                    style: GoogleFonts.poppins(),
+                                  ),
                                 ),
                               ] else if (statusText == 'Approved') ...[
                                 // CCR Call Button (if approved)
@@ -228,21 +319,33 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                                     // For now, just show a message
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                          content: Text(
-                                              "Notifying CCR to connect with ${application['applicantName'] ?? 'applicant'}")),
+                                        content: Text(
+                                          "Notifying CCR to connect with ${application['applicantName'] ?? 'applicant'}",
+                                        ),
+                                      ),
                                     );
                                   },
-                                  icon: const Icon(Icons.headset_mic_rounded, size: 18), // Changed Icon
-                                  label: Text("Request CCR Call", style: GoogleFonts.poppins(fontSize: 13)), // Changed label
+                                  icon: const Icon(
+                                    Icons.headset_mic_rounded,
+                                    size: 18,
+                                  ), // Changed Icon
+                                  label: Text(
+                                    "Request CCR Call",
+                                    style: GoogleFonts.poppins(fontSize: 13),
+                                  ), // Changed label
                                   style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue[800], // Slightly lighter blue
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), // Padding
-                                   ),
+                                    backgroundColor: Colors
+                                        .blue[800], // Slightly lighter blue
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 9,
+                                    ), // Padding
+                                  ),
                                 ),
-                              ] // Add cases for Declined/Cancelled if needed (e.g., delete application?)
+                              ], // Add cases for Declined/Cancelled if needed (e.g., delete application?)
                             ],
-                          )
+                          ),
                         ],
                       ),
                     ),
@@ -253,18 +356,17 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
     );
   }
 
- Widget _buildDetailRow(String label, String value) {
-   return Padding(
-     padding: const EdgeInsets.symmetric(vertical: 2.0),
-     child: Row(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         Text(label, style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-         const SizedBox(width: 5),
-         Expanded(child: Text(value, style: GoogleFonts.poppins())),
-       ],
-     ),
-   );
- }
-
-} 
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 5),
+          Expanded(child: Text(value, style: GoogleFonts.poppins())),
+        ],
+      ),
+    );
+  }
+}
