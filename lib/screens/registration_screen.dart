@@ -356,7 +356,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 const SizedBox(height: 15),
                 
                 DropdownButtonFormField<String>(
-                  value: userType,
+                  initialValue: userType,
                   items: const [
                     DropdownMenuItem(value: "jobSeeker", child: Text("Job Seeker")),
                     DropdownMenuItem(value: "employer", child: Text("Employer")),
@@ -369,7 +369,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 const SizedBox(height: 15),
                 
                 DropdownButtonFormField<String>(
-                  value: gender,
+                  initialValue: gender,
                   items: const [
                     DropdownMenuItem(value: "Male", child: Text("Male")),
                     DropdownMenuItem(value: "Female", child: Text("Female")),

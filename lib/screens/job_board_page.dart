@@ -1,130 +1,349 @@
 import 'package:flutter/material.dart';
-import '../widgets/hover_button.dart'; // <--- Make sure this import is here
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'applied_jobs_page.dart'; // ❗️ আপনার 'Applied Jobs' পেজটি ইম্পোর্ট করুন
 
-// ---------------------- JOB BOARD PAGE ----------------------
-
-class JobBoardPage extends StatelessWidget {
+class JobBoardPage extends StatefulWidget {
   const JobBoardPage({super.key});
 
-  // Sample data is removed.
+  @override
+  State<JobBoardPage> createState() => _JobBoardPageState();
+}
+
+class _JobBoardPageState extends State<JobBoardPage> {
+  // ১. Firebase থেকে জবগুলো নিয়ে আসার জন্য স্ট্রিম
+  final Stream<QuerySnapshot> _jobsStream = FirebaseFirestore.instance
+      .collection('jobs')
+      .orderBy('posted_at', descending: true)
+      .snapshots();
+
+  // --- ২. জব রিপোর্ট করার ফাংশন (এটি ঠিক আছে) ---
+  Future<void> _reportJob(String jobId, String jobTitle) async {
+    // (আপনার রিপোর্ট করার সম্পূর্ণ কোড)
+    final bool? didConfirm = await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Report Job?'),
+          content: Text('Are you sure you want to report "$jobTitle" as fake/inappropriate?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Report', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (didConfirm == true && mounted) {
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        await FirebaseFirestore.instance.collection('reports').add({
+          'job_id': jobId,
+          'job_title': jobTitle,
+          'reported_at': FieldValue.serverTimestamp(),
+          'reporter_uid': user?.uid,
+          'reason': 'User reported as fake',
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Job reported successfully. We will review it.'),
+            backgroundColor: Colors.orangeAccent,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // --- ৩. জব Apply করার ফাংশন (সম্পূর্ণ ফিক্স করা) ---
+  Future<void> _applyForJob(String jobId, Map<String, dynamic> jobData) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to apply'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // ক. ডুপ্লিকেট আবেদন চেক করুন
+      final existingApplication = await FirebaseFirestore.instance
+          .collection('applications')
+          .where('job_id', isEqualTo: jobId)
+          .where('applicant_uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (existingApplication.docs.isNotEmpty) {
+        if (!mounted) return;
+        Navigator.pop(context); // লোডিং বন্ধ করুন
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You have already applied for this job'), backgroundColor: Colors.orange),
+        );
+        return;
+      }
+
+      // খ. আবেদনকারীর সব তথ্য 'users' কালেকশন থেকে নিন
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (!userDoc.exists || userDoc.data() == null) {
+         if (!mounted) return;
+        Navigator.pop(context); // লোডিং বন্ধ করুন
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please complete your profile first.'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+      final userData = userDoc.data() as Map<String, dynamic>;
+
+      // --- গ. 'applications' কালেকশনে নতুন ডকুমেন্ট তৈরি (ফিক্সড) ---
+      // (এখানে আমরা আপনার স্ক্রিনশট অনুযায়ী সঠিক ফিল্ডের নাম ব্যবহার করেছি)
+      await FirebaseFirestore.instance.collection('applications').add({
+        // জব সম্পর্কিত তথ্য
+        'job_id': jobId,
+        'job_title': jobData['job_title'],
+        'company_name': jobData['company_name'],
+        'salary': jobData['salary'],
+        'location': jobData['location'],
+        
+        // এমপ্লয়ার সম্পর্কিত তথ্য
+        'employer_uid': jobData['posted_by_uid'],
+
+        // আবেদনকারী সম্পর্কিত তথ্য (আপনার ডাটাবেস অনুযায়ী ফিক্স করা)
+        'applicant_uid': user.uid,
+        'applicant_email': user.email,
+        'applicant_name': userData['name'] ?? 'N/A',
+        'applicant_phone': userData['phone'] ?? 'N/A',
+        'father_name': userData['fatherName'] ?? 'N/A',     // <-- 'father_name' থেকে 'fatherName'
+        'permanent_address': userData['permanentAddress'] ?? 'N/A', // <-- 'permanent_address' থেকে 'permanentAddress'
+        'nid_number': userData['nid'] ?? 'N/A',             // <-- 'nid_number' থেকে 'nid'
+        'gender': userData['gender'] ?? 'N/A',
+        'applicant_location': userData['location'] ?? 'N/A',
+
+        // যে ফিল্ডগুলো আপনার ডাটাবেসে নেই (এগুলো 'N/A' হিসেবে সেভ হবে)
+        'present_address': userData['present_address'] ?? 'N/A',
+        'bio': userData['bio'] ?? 'N/A',
+        
+        // স্ট্যাটাস
+        'applied_at': FieldValue.serverTimestamp(),
+        'status': 'pending',
+      });
+      // --- ফিক্স করা শেষ ---
+
+      if (!mounted) return;
+      Navigator.pop(context); // লোডিং বন্ধ করুন
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Applied Successfully!'), backgroundColor: Colors.green),
+      );
+
+      // --- ৪. Applied Jobs পেজে নিয়ে যাওয়া ---
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const AppliedJobsPage()),
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // লোডিং বন্ধ করুন
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to apply: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Fetch jobs from your backend here
-    final List<Map<String, String>> jobs = []; // Currently an empty list
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Job Board"),
+        title: Text("Job Board", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.blue[900],
+        foregroundColor: Colors.white,
       ),
       backgroundColor: Colors.grey[100],
-      // Show a message if there are no jobs
-      body: jobs.isEmpty
-          ? const Center(
+      
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _jobsStream,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(child: Text('Something went wrong'));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.data!.docs.isEmpty) {
+            return Center(
               child: Text(
                 "No jobs posted yet.",
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey),
               ),
-            )
-          : ListView.builder(
-              itemCount: jobs.length,
-              itemBuilder: (context, index) {
-                final job = jobs[index];
-                return Card(
-                  color: Colors.lightBlue[100],
-                  margin: const EdgeInsets.all(12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          job['title'] ?? "",
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 6),
-                        Text("${job['category']} - ${job['location']}"),
-                        const SizedBox(height: 6),
-                        Text(
-                            "Salary: ${job['salary']} | Type: ${job['jobType']}"),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            // Apply Button with hover
-                            HoverButton( // Use the custom widget
-                              onPressed: () {
-                                // TODO: Add backend logic to apply for the job
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text(
-                                          "Applied for ${job['title']} (Backend Pending)")),
-                                );
-                              },
-                              text: "Apply",
-                              backgroundColor:
-                                  const Color.fromARGB(255, 69, 202, 98),
-                              hoverColor:
-                                  const Color.fromARGB(255, 52, 180, 75),
-                              textColor: Colors.white,
+            );
+          }
+
+          // জব লিস্ট তৈরি
+          return ListView.builder(
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              var document = snapshot.data!.docs[index];
+              var job = document.data() as Map<String, dynamic>;
+              String jobId = document.id;
+
+              return Card(
+                color: Colors.lightBlue[50], 
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // জব টাইটেল
+                      Text(
+                        job['job_title'] ?? "No Title",
+                        style: GoogleFonts.poppins(fontSize: 19, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      
+                      // ক্যাটাগরি এবং লোকেশন
+                      Text(
+                        "${job['category'] ?? 'N/A'} - ${job['location'] ?? 'N/A'}",
+                        style: GoogleFonts.poppins(color: Colors.grey[800], fontSize: 15),
+                      ),
+                      const SizedBox(height: 6),
+                      
+                      // স্যালারি এবং টাইপ
+                      Text(
+                        "Salary: ${job['salary'] ?? 'N/A'} | Type: ${job['job_type'] ?? 'N/A'}",
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w500, 
+                            color: Colors.blue[900]),
+                      ),
+                      const SizedBox(height: 15),
+
+                      // --- বাটন সেকশন (Report, Details, Apply) ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          // ১. Report Button
+                          TextButton.icon(
+                            onPressed: () => _reportJob(jobId, job['job_title'] ?? 'N/A'),
+                            icon: const Icon(Icons.flag_outlined, size: 18, color: Colors.red),
+                            label: Text("Report", style: GoogleFonts.poppins(color: Colors.red, fontWeight: FontWeight.bold)),
+                          ),
+                          
+                          const Spacer(),
+
+                          // ২. Details Button
+                          OutlinedButton(
+                            onPressed: () {
+                              _showJobDetails(context, job);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.blue[900],
+                              side: BorderSide(color: Colors.blue[900]!),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
-                            const SizedBox(width: 10),
-                            // Details Button with hover
-                            HoverOutlinedButton( // Use the custom widget
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) {
-                                    return AlertDialog(
-                                      title: Text(job['title'] ?? ""),
-                                      content: SingleChildScrollView( // Added for potentially long details
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                                "Category: ${job['category']}"),
-                                            Text(
-                                                "Location: ${job['location']}"),
-                                            Text("Salary: ${job['salary']}"),
-                                            Text("Job Type: ${job['jobType']}"),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                                "Description: ${job['description']}"),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                                "Requirements: ${job['requirements']}"),
-                                            const SizedBox(height: 8),
-                                            Text("Company: ${job['company']}"),
-                                          ],
-                                        ),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context),
-                                          child: const Text("Close"),
-                                        )
-                                      ],
-                                    );
-                                  },
-                                );
-                              },
-                              text: "Details",
+                            child: Text("Details", style: GoogleFonts.poppins()),
+                          ),
+                          
+                          const SizedBox(width: 10),
+
+                          // --- ৫. আপডেটেড Apply Button ---
+                          ElevatedButton(
+                            onPressed: () {
+                              // এই ফিক্সড ফাংশনটি কল হবে
+                              _applyForJob(jobId, job);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color.fromARGB(255, 69, 202, 98),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                            child: Text("Apply", style: GoogleFonts.poppins()),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                );
-              },
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  // Details ডায়ালগ দেখানোর ফাংশন (এটি ঠিক আছে)
+  void _showJobDetails(BuildContext context, Map<String, dynamic> job) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(job['job_title'] ?? "", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _detailRow("Category:", job['category']),
+                _detailRow("Location:", job['location']),
+                _detailRow("Salary:", job['salary']),
+                _detailRow("Job Type:", job['job_type']),
+                const Divider(),
+                Text("Description:", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                Text(job['description'] ?? "N/A", style: GoogleFonts.poppins()),
+                const SizedBox(height: 10),
+                Text("Requirements:", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                Text(job['requirements'] ?? "N/A", style: GoogleFonts.poppins()),
+                const SizedBox(height: 10),
+                _detailRow("Company:", job['company_name']),
+              ],
             ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Close", style: GoogleFonts.poppins()),
+            )
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4.0),
+      child: Row(
+        children: [
+          Text("$label ", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          Expanded(child: Text(value ?? "N/A", style: GoogleFonts.poppins())),
+        ],
+      ),
     );
   }
 }
+
