@@ -225,10 +225,10 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                                   },
                                 );
                               },
-                              child: Text("Details", style: GoogleFonts.poppins()),
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
+                              child: Text("Details", style: GoogleFonts.poppins()),
                             ),
                             const SizedBox(width: 8),
 
