@@ -22,29 +22,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
   String userType = 'jobSeeker';
 
+  // --- আপডেট করা লগইন ফাংশন ---
   Future<void> _loginUser() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (userType == 'admin') {
-      if (emailController.text.trim() == 'admin@worknest.com' &&
-          passwordController.text.trim() == 'admin1234') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminDashboard()),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Invalid Admin Credentials"),
-              backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
 
     setState(() => _isLoading = true);
 
     try {
+      // ১. Firebase Authentication দিয়ে লগইন (Admin, Employer, Seeker সবার জন্য একই)
       UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(
               email: emailController.text.trim(),
@@ -52,23 +37,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (userCredential.user != null) {
         String uid = userCredential.user!.uid;
+
+        // ২. ডাটাবেস থেকে ইউজারের তথ্য আনা
         DocumentSnapshot userDoc =
             await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
         if (!userDoc.exists) {
-          throw Exception("User data not found in Database!");
+          throw Exception("User profile not found in Database!");
         }
 
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
         String actualUserType = userData['userType'] ?? 'jobSeeker';
 
+        // ৩. রেডিও বাটন সিলেকশন এবং আসল ডাটাবেস রোলের মধ্যে মিল আছে কিনা চেক করা
         if (userType != actualUserType) {
-          await FirebaseAuth.instance.signOut();
-          throw Exception("Account type mismatch! You are a $actualUserType.");
+          await FirebaseAuth.instance.signOut(); // মিল না থাকলে লগআউট করে দেওয়া
+          throw Exception("Account type mismatch! You are registered as $actualUserType.");
         }
 
+        // ৪. সঠিক ড্যাশবোর্ডে পাঠানো
         if (mounted) {
-          if (actualUserType == 'employer') {
+          if (actualUserType == 'admin') {
+            // --> Admin Dashboard
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminDashboard()),
+            );
+          } else if (actualUserType == 'employer') {
+            // --> Employer Dashboard
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -77,6 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           .map((k, v) => MapEntry(k, v.toString())))),
             );
           } else {
+            // --> Job Seeker Dashboard
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -88,9 +85,16 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
+        String message = "Login Failed";
+        if (e.code == 'user-not-found') {
+          message = "No user found with this email.";
+        } else if (e.code == 'wrong-password') {
+          message = "Incorrect password.";
+        } else if (e.code == 'invalid-credential') {
+          message = "Invalid email or password.";
+        }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("Login Failed: ${e.message}"),
-            backgroundColor: Colors.red));
+            content: Text(message), backgroundColor: Colors.red));
       }
     } catch (e) {
       if (mounted) {
@@ -362,3 +366,9 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
     );
   }
 }
+
+
+
+
+
+
