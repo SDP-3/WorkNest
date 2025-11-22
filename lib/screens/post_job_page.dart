@@ -148,7 +148,7 @@ class _PostJobPageState extends State<PostJobPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<String>(
-              value: jobCategory,
+              initialValue: jobCategory,
               decoration: _inputDecoration("Job Category", icon: Icons.category_rounded),
               items: _jobCategories.map((String category) {
                 return DropdownMenuItem<String>(
@@ -180,7 +180,7 @@ class _PostJobPageState extends State<PostJobPage> {
             ),
             const SizedBox(height: 15),
             DropdownButtonFormField<String>(
-              value: jobType,
+              initialValue: jobType,
               decoration: _inputDecoration("Job Type", icon: Icons.timer_rounded),
               items: _jobTypes.map((String type) {
                 return DropdownMenuItem<String>(
