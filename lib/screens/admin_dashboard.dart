@@ -12,10 +12,14 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   String _selectedItem = 'Dashboard';
+  Query _userQuery = FirebaseFirestore.instance.collection('users').orderBy('createdAt', descending: true);
 
-  void _changePage(String pageName) {
+  void _changePage(String pageName, {Query? userQuery}) {
     setState(() {
       _selectedItem = pageName;
+      if (pageName == 'Users') {
+        _userQuery = userQuery ?? FirebaseFirestore.instance.collection('users').orderBy('createdAt', descending: true);
+      }
     });
   }
 
@@ -34,13 +38,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 'Dashboard':
         return AdminDashboardHome(onPageChange: _changePage);
       case 'Users':
-        return const AdminUserManagement();
+        return AdminUserManagement(query: _userQuery);
       case 'Jobs':
         return const AdminJobManagement();
       case 'Support Chat':
         return const AdminSupportChat();
       case 'Reports':
-         return const AdminReportsPage(); // নতুন রিপোর্ট পেজ যুক্ত করা হলো
+        return const AdminReportsPage(); // আপডেটেড রিপোর্ট পেজ
       default:
         return const Center(child: Text("Welcome Admin"));
     }
@@ -127,7 +131,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
         onTap: () {
-          setState(() => _selectedItem = title);
+          if (title == 'Users') {
+            _changePage(title, userQuery: FirebaseFirestore.instance.collection('users').orderBy('createdAt', descending: true));
+          } else {
+            _changePage(title);
+          }
           Navigator.pop(context);
         },
       ),
@@ -163,9 +171,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
 }
 
 // ==================== 1. DASHBOARD HOME ====================
-class AdminDashboardHome extends StatelessWidget {
-  final Function(String) onPageChange;
+class AdminDashboardHome extends StatefulWidget {
+  final Function(String, {Query? userQuery}) onPageChange;
   const AdminDashboardHome({super.key, required this.onPageChange});
+
+  @override
+  State<AdminDashboardHome> createState() => _AdminDashboardHomeState();
+}
+
+class _AdminDashboardHomeState extends State<AdminDashboardHome> {
+  late Stream<QuerySnapshot> _todaysSignupsStream;
+  late Stream<QuerySnapshot> _recentUsersStream;
+  late Query _todaysSignupsQuery;
+
+  @override
+  void initState() {
+    super.initState();
+    DateTime now = DateTime.now();
+    DateTime startOfToday = DateTime(now.year, now.month, now.day);
+    DateTime endOfToday = startOfToday.add(const Duration(days: 1));
+
+    _todaysSignupsQuery = FirebaseFirestore.instance
+        .collection('users')
+        .where('createdAt', isGreaterThanOrEqualTo: startOfToday)
+        .where('createdAt', isLessThan: endOfToday);
+        
+    _todaysSignupsStream = _todaysSignupsQuery.snapshots();
+        
+    _recentUsersStream = FirebaseFirestore.instance
+        .collection('users')
+        .orderBy('createdAt', descending: true)
+        .limit(5)
+        .snapshots();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +220,8 @@ class AdminDashboardHome extends StatelessWidget {
                 stream: FirebaseFirestore.instance.collection('users').snapshots(),
                 builder: (context, snapshot) {
                   String count = snapshot.hasData ? "${snapshot.data!.docs.length}" : "...";
-                  return _buildStatCard("Total Users", count, Icons.group, Colors.blue, onTap: () => onPageChange('Users'));
+                  return _buildStatCard("Total Users", count, Icons.group, Colors.blue, 
+                    onTap: () => widget.onPageChange('Users', userQuery: FirebaseFirestore.instance.collection('users').orderBy('createdAt', descending: true)));
                 },
               ),
               const SizedBox(width: 15),
@@ -190,7 +229,7 @@ class AdminDashboardHome extends StatelessWidget {
                 stream: FirebaseFirestore.instance.collection('jobs').snapshots(),
                 builder: (context, snapshot) {
                   String count = snapshot.hasData ? "${snapshot.data!.docs.length}" : "...";
-                  return _buildStatCard("Active Jobs", count, Icons.work, Colors.green, onTap: () => onPageChange('Jobs'));
+                  return _buildStatCard("Active Jobs", count, Icons.work, Colors.green, onTap: () => widget.onPageChange('Jobs'));
                 },
               ),
             ],
@@ -198,34 +237,44 @@ class AdminDashboardHome extends StatelessWidget {
           const SizedBox(height: 15),
           Row(
             children: [
-               // REAL REPORT COUNT
                StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('reports').where('status', isEqualTo: 'pending').snapshots(),
-                builder: (context, snapshot) {
-                  String count = snapshot.hasData ? "${snapshot.data!.docs.length}" : "0";
-                  return _buildStatCard("Pending Reports", count, Icons.warning_amber_rounded, Colors.orange, onTap: () => onPageChange('Reports'));
-                },
-              ),
-              const SizedBox(width: 15),
-              _buildStatCard("Today's Signups", "0", Icons.person_add, Colors.purple, onTap: () => onPageChange('Users')),
+                 stream: FirebaseFirestore.instance.collection('reports').where('status', isEqualTo: 'pending').snapshots(),
+                 builder: (context, snapshot) {
+                   String count = snapshot.hasData ? "${snapshot.data!.docs.length}" : "0";
+                   return _buildStatCard("Pending Reports", count, Icons.warning_amber_rounded, Colors.orange, onTap: () => widget.onPageChange('Reports'));
+                 },
+               ),
+               const SizedBox(width: 15),
+               StreamBuilder<QuerySnapshot>(
+                 stream: _todaysSignupsStream,
+                 builder: (context, snapshot) {
+                   String count = snapshot.hasData ? "${snapshot.data!.docs.length}" : "...";
+                   return _buildStatCard("Today's Signups", count, Icons.person_add, Colors.purple, 
+                     onTap: () => widget.onPageChange('Users', userQuery: _todaysSignupsQuery));
+                 },
+               ),
             ],
           ),
           const SizedBox(height: 30),
           Text("Recent Users Activity", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue[900])),
           const SizedBox(height: 10),
+          
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').limit(5).snapshots(),
+            stream: _recentUsersStream,
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+              if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Text("No recent user activity.");
+              
               var docs = snapshot.data!.docs;
-              if (docs.isEmpty) return const Text("No recent activity.");
+              
               return Column(
                 children: docs.map((doc) {
                   var data = doc.data() as Map<String, dynamic>;
                   return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: Icon(Icons.person_outline, color: Colors.blue[900]),
-                      title: Text("New user: ${data['name'] ?? data['email'] ?? 'Unknown'}", style: GoogleFonts.poppins()),
+                      title: Text(data['name'] ?? data['email'] ?? 'Unknown', style: GoogleFonts.poppins()),
                       subtitle: Text(data['userType'] ?? 'N/A', style: GoogleFonts.poppins(fontSize: 12)),
                     ),
                   );
@@ -266,17 +315,18 @@ class AdminDashboardHome extends StatelessWidget {
 
 // ==================== 2. USER MANAGEMENT ====================
 class AdminUserManagement extends StatelessWidget {
-  const AdminUserManagement({super.key});
+  final Query query;
+  const AdminUserManagement({super.key, required this.query});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+      stream: query.snapshots(), 
       builder: (context, snapshot) {
-        if (snapshot.hasError) return const Center(child: Text("Something went wrong!"));
+        if (snapshot.hasError) return const Center(child: Text("Something went wrong! Check indexes."));
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         var users = snapshot.data!.docs;
-        if (users.isEmpty) return const Center(child: Text("No users found."));
+        if (users.isEmpty) return const Center(child: Text("No users found for this filter."));
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -284,11 +334,10 @@ class AdminUserManagement extends StatelessWidget {
           itemBuilder: (context, index) {
             var userData = users[index].data() as Map<String, dynamic>;
             String userType = userData['userType'] ?? 'Unknown';
-            bool isBlocked = userData['isBlocked'] == true; // চেক করা হচ্ছে ইউজার ব্লকড কিনা
+            bool isBlocked = userData['isBlocked'] == true;
 
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
-              // ব্লকড হলে লালচে ব্যাকগ্রাউন্ড দেখাবে
               color: isBlocked ? Colors.red[50] : null,
               child: ListTile(
                 leading: CircleAvatar(
@@ -297,15 +346,15 @@ class AdminUserManagement extends StatelessWidget {
                 ),
                 title: Text(userData['name'] ?? 'No Name', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                 subtitle: Text("${userData['email'] ?? 'No Email'} \nRole: $userType ${isBlocked ? '(BANNED)' : ''}", 
-                  style: GoogleFonts.poppins(color: isBlocked ? Colors.red : Colors.grey[700], fontSize: 13)),
+                    style: GoogleFonts.poppins(color: isBlocked ? Colors.red : Colors.grey[700], fontSize: 13)),
                 isThreeLine: true,
                 trailing: isBlocked 
-                  ? const Icon(Icons.block, color: Colors.red) // ব্লকড হলে আইকন দেখাবে
-                  : PopupMenuButton(
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(value: 'view', child: Text("View Details")),
-                    ],
-                  ),
+                    ? const Icon(Icons.block, color: Colors.red)
+                    : PopupMenuButton(
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'view', child: Text("View Details")),
+                        ],
+                      ),
               ),
             );
           },
@@ -349,7 +398,7 @@ class AdminJobManagement extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                         Chip(label: Text(jobData['category'] ?? 'Job', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12)), backgroundColor: Colors.blue[300]),
+                        Chip(label: Text(jobData['category'] ?? 'Job', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12)), backgroundColor: Colors.blue[300]),
                         OutlinedButton.icon(
                           onPressed: () async {
                             bool confirm = await showDialog(
@@ -385,14 +434,78 @@ class AdminJobManagement extends StatelessWidget {
   }
 }
 
-// ==================== 4. REPORTS PAGE (NEW & FUNCTIONAL) ====================
+// ==================== 4. REPORTS PAGE (UPDATED: VIEW BIODATA) ====================
 class AdminReportsPage extends StatelessWidget {
   const AdminReportsPage({super.key});
+
+  // --- নতুন ফাংশন: ইউজারের প্রোফাইল দেখার জন্য ---
+  void _showReportedUserProfile(BuildContext context, String uid) {
+    if (uid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User ID not found")));
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Reported User Profile", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          content: FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+              }
+              if (snapshot.hasError || !snapshot.data!.exists) {
+                return const Text("User details not found or user has been deleted.");
+              }
+
+              var userData = snapshot.data!.data() as Map<String, dynamic>;
+
+              return SingleChildScrollView(
+                child: ListBody(
+                  children: [
+                    _buildDetailRow("Name:", userData['name']),
+                    _buildDetailRow("Email:", userData['email']),
+                    _buildDetailRow("Phone:", userData['phone']),
+                    _buildDetailRow("Father:", userData['fatherName']), // আপনার ডাটাবেস ফিল্ডের নাম অনুযায়ী
+                    _buildDetailRow("Address:", userData['permanentAddress']),
+                    _buildDetailRow("NID:", userData['nid']),
+                    const SizedBox(height: 10),
+                    Text("Bio:", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                    Text(userData['bio'] ?? 'No bio available', style: GoogleFonts.poppins()),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("$label ", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14)),
+          Expanded(child: Text(value ?? 'N/A', style: GoogleFonts.poppins(fontSize: 14))),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      // শুধু 'pending' স্ট্যাটাসের রিপোর্টগুলো আনা হচ্ছে
       stream: FirebaseFirestore.instance.collection('reports').where('status', isEqualTo: 'pending').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const Center(child: Text("Error loading reports"));
@@ -442,23 +555,43 @@ class AdminReportsPage extends StatelessWidget {
                     Text("Reason:", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.grey[700])),
                     Text(reason, style: GoogleFonts.poppins(fontSize: 15)),
                     const SizedBox(height: 10),
-                    Text("Reported User ID:", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.grey[700])),
-                    SelectableText(reportedUid, style: GoogleFonts.poppins(fontSize: 13, color: Colors.blueGrey)), // কপি করার সুবিধার জন্য SelectableText
+                    
+                    // --- নতুন বাটন যোগ করা হলো ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Reported User ID:", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.grey[700], fontSize: 12)),
+                            SizedBox(
+                              width: 100,
+                              child: Text(reportedUid, style: GoogleFonts.poppins(fontSize: 12, color: Colors.blueGrey), overflow: TextOverflow.ellipsis),
+                            ),
+                          ],
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _showReportedUserProfile(context, reportedUid),
+                          icon: const Icon(Icons.person_search, size: 18),
+                          label: Text("View Profile", style: GoogleFonts.poppins(fontSize: 13)),
+                          style: OutlinedButton.styleFrom(foregroundColor: Colors.blue[800]),
+                        )
+                      ],
+                    ),
+                    // ----------------------------------
+
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        // IGNORE BUTTON
                         TextButton(
                           onPressed: () async {
-                            // রিপোর্ট ইগনোর করলে শুধু স্ট্যাটাস চেঞ্জ হবে
                             await FirebaseFirestore.instance.collection('reports').doc(reportId).update({'status': 'ignored'});
                             if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Report ignored")));
                           },
                           child: Text("Ignore", style: GoogleFonts.poppins(color: Colors.grey)),
                         ),
                         const SizedBox(width: 10),
-                        // BAN USER BUTTON
                         ElevatedButton.icon(
                           onPressed: () async {
                             bool confirm = await showDialog(
@@ -474,9 +607,7 @@ class AdminReportsPage extends StatelessWidget {
                             ) ?? false;
 
                             if (confirm && reportedUid.isNotEmpty) {
-                              // ১. ইউজারকে ব্যান করা (isBlocked: true সেট করা)
                               await FirebaseFirestore.instance.collection('users').doc(reportedUid).update({'isBlocked': true});
-                              // ২. রিপোর্টটি রিজলভ করে দেওয়া
                               await FirebaseFirestore.instance.collection('reports').doc(reportId).update({'status': 'resolved'});
                               
                               if(context.mounted) {
@@ -506,7 +637,7 @@ class AdminReportsPage extends StatelessWidget {
   }
 }
 
-// ==================== 5. SUPPORT CHAT (PLACEHOLDER) ====================
+// ==================== 5. SUPPORT CHAT ====================
 class AdminSupportChat extends StatelessWidget {
   const AdminSupportChat({super.key});
 
@@ -524,3 +655,7 @@ class AdminSupportChat extends StatelessWidget {
     );
   }
 }
+
+
+
+
