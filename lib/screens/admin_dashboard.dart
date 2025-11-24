@@ -1,8 +1,8 @@
-// screens/admin_dashboard.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_screen.dart';
+import 'admin_chat_detail_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -45,13 +45,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 'Dashboard':
         return AdminDashboardHome(onPageChange: _changePage);
       case 'Users':
-        return AdminUserManagement(query: _userQuery);
+        return AdminUserManagement(query: _userQuery); // এখানে ফিক্স করা হয়েছে
       case 'Jobs':
         return const AdminJobManagement();
       case 'Support Chat':
         return const AdminSupportChat();
       case 'Reports':
-        return const AdminReportsPage(); // আপডেটেড রিপোর্ট পেজ
+        return const AdminReportsPage();
       default:
         return const Center(child: Text("Welcome Admin"));
     }
@@ -370,15 +370,13 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
           StreamBuilder<QuerySnapshot>(
             stream: _recentUsersStream,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting)
                 return const SizedBox(
                   height: 100,
                   child: Center(child: CircularProgressIndicator()),
                 );
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
                 return const Text("No recent user activity.");
-              }
 
               var docs = snapshot.data!.docs;
 
@@ -456,28 +454,99 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
   }
 }
 
-// ==================== 2. USER MANAGEMENT ====================
+// ==================== 2. USER MANAGEMENT (UPDATED VIEW DETAILS) ====================
 class AdminUserManagement extends StatelessWidget {
   final Query query;
   const AdminUserManagement({super.key, required this.query});
+
+  // --- ✅ নতুন ফাংশন: ইউজারের ডিটেইলস দেখানোর জন্য ---
+  void _showUserDetails(BuildContext context, Map<String, dynamic> userData) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            "User Details",
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: [
+                _buildDetailRow("Name:", userData['name']),
+                _buildDetailRow("Email:", userData['email']),
+                _buildDetailRow("Phone:", userData['phone']),
+                _buildDetailRow("User Type:", userData['userType']),
+                const Divider(),
+                _buildDetailRow("Father's Name:", userData['fatherName']),
+                _buildDetailRow("NID:", userData['nid']),
+                _buildDetailRow("Gender:", userData['gender']),
+                const Divider(),
+                _buildDetailRow("Present Addr:", userData['presentAddress']),
+                _buildDetailRow(
+                  "Permanent Addr:",
+                  userData['permanentAddress'],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "Bio:",
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  userData['bio'] ?? 'No bio available',
+                  style: GoogleFonts.poppins(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110, // লেবেলের জন্য ফিক্সড জায়গা
+            child: Text(
+              "$label ",
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value ?? 'N/A',
+              style: GoogleFonts.poppins(fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: query.snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const Center(
-            child: Text("Something went wrong! Check indexes."),
-          );
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.hasError)
+          return const Center(child: Text("Something went wrong!"));
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        }
         var users = snapshot.data!.docs;
-        if (users.isEmpty) {
-          return const Center(child: Text("No users found for this filter."));
-        }
+        if (users.isEmpty) return const Center(child: Text("No users found."));
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -516,7 +585,13 @@ class AdminUserManagement extends StatelessWidget {
                 isThreeLine: true,
                 trailing: isBlocked
                     ? const Icon(Icons.block, color: Colors.red)
-                    : PopupMenuButton(
+                    : PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'view') {
+                            // ✅ এখানে ফাংশনটি কল করা হচ্ছে
+                            _showUserDetails(context, userData);
+                          }
+                        },
                         itemBuilder: (context) => [
                           const PopupMenuItem(
                             value: 'view',
@@ -545,16 +620,13 @@ class AdminJobManagement extends StatelessWidget {
           .orderBy('posted_at', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
+        if (snapshot.hasError)
           return const Center(child: Text("Error loading jobs"));
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        }
         var jobs = snapshot.data!.docs;
-        if (jobs.isEmpty) {
+        if (jobs.isEmpty)
           return const Center(child: Text("No jobs posted yet."));
-        }
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -635,13 +707,12 @@ class AdminJobManagement extends StatelessWidget {
                                   .collection('jobs')
                                   .doc(jobs[index].id)
                                   .delete();
-                              if (context.mounted) {
+                              if (context.mounted)
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text("Job deleted successfully"),
                                   ),
                                 );
-                              }
                             }
                           },
                           icon: const Icon(
@@ -670,11 +741,10 @@ class AdminJobManagement extends StatelessWidget {
   }
 }
 
-// ==================== 4. REPORTS PAGE (UPDATED: VIEW BIODATA) ====================
+// ==================== 4. REPORTS PAGE ====================
 class AdminReportsPage extends StatelessWidget {
   const AdminReportsPage({super.key});
 
-  // --- নতুন ফাংশন: ইউজারের প্রোফাইল দেখার জন্য ---
   void _showReportedUserProfile(BuildContext context, String uid) {
     if (uid.isEmpty) {
       ScaffoldMessenger.of(
@@ -717,10 +787,7 @@ class AdminReportsPage extends StatelessWidget {
                     _buildDetailRow("Name:", userData['name']),
                     _buildDetailRow("Email:", userData['email']),
                     _buildDetailRow("Phone:", userData['phone']),
-                    _buildDetailRow(
-                      "Father:",
-                      userData['fatherName'],
-                    ), // আপনার ডাটাবেস ফিল্ডের নাম অনুযায়ী
+                    _buildDetailRow("Father:", userData['fatherName']),
                     _buildDetailRow("Address:", userData['permanentAddress']),
                     _buildDetailRow("NID:", userData['nid']),
                     const SizedBox(height: 10),
@@ -754,11 +821,14 @@ class AdminReportsPage extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "$label ",
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+          SizedBox(
+            width: 110,
+            child: Text(
+              "$label ",
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
           ),
           Expanded(
@@ -780,12 +850,10 @@ class AdminReportsPage extends StatelessWidget {
           .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
+        if (snapshot.hasError)
           return const Center(child: Text("Error loading reports"));
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        }
 
         var reports = snapshot.data!.docs;
 
@@ -859,7 +927,6 @@ class AdminReportsPage extends StatelessWidget {
                     Text(reason, style: GoogleFonts.poppins(fontSize: 15)),
                     const SizedBox(height: 10),
 
-                    // --- নতুন বাটন যোগ করা হলো ---
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -902,7 +969,6 @@ class AdminReportsPage extends StatelessWidget {
                       ],
                     ),
 
-                    // ----------------------------------
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -913,11 +979,10 @@ class AdminReportsPage extends StatelessWidget {
                                 .collection('reports')
                                 .doc(reportId)
                                 .update({'status': 'ignored'});
-                            if (context.mounted) {
+                            if (context.mounted)
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text("Report ignored")),
                               );
-                            }
                           },
                           child: Text(
                             "Ignore",
@@ -925,6 +990,8 @@ class AdminReportsPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 10),
+
+                        // ✅ BAN BUTTON WITH NOTIFICATION
                         ElevatedButton.icon(
                           onPressed: () async {
                             bool confirm =
@@ -933,7 +1000,7 @@ class AdminReportsPage extends StatelessWidget {
                                   builder: (context) => AlertDialog(
                                     title: const Text("Confirm Ban"),
                                     content: const Text(
-                                      "Are you sure you want to PERMANENTLY BAN this user? They won't be able to login anymore.",
+                                      "Are you sure you want to PERMANENTLY BAN this user?",
                                     ),
                                     actions: [
                                       TextButton(
@@ -967,12 +1034,22 @@ class AdminReportsPage extends StatelessWidget {
                                   .doc(reportId)
                                   .update({'status': 'resolved'});
 
+                              await FirebaseFirestore.instance
+                                  .collection('notifications')
+                                  .add({
+                                    'receiver_uid': reportedUid,
+                                    'title': "Account Suspended ⚠️",
+                                    'body':
+                                        "Your account has been banned due to policy violation.",
+                                    'type': 'ban',
+                                    'created_at': FieldValue.serverTimestamp(),
+                                    'is_read': false,
+                                  });
+
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text(
-                                      "User has been BANNED successfully",
-                                    ),
+                                    content: Text("User BANNED & Notified"),
                                     backgroundColor: Colors.redAccent,
                                   ),
                                 );
@@ -1004,24 +1081,134 @@ class AdminReportsPage extends StatelessWidget {
   }
 }
 
-// ==================== 5. SUPPORT CHAT ====================
+// ==================== 5. SUPPORT CHAT (UPDATED LIST with DELETE) ====================
 class AdminSupportChat extends StatelessWidget {
   const AdminSupportChat({super.key});
 
+  // চ্যাট ডিলিট করার ফাংশন
+  void _deleteChat(BuildContext context, String userId) async {
+    bool confirm =
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Delete Chat?"),
+            content: const Text(
+              "Are you sure you want to remove this chat thread?",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  "Delete",
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirm) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('support_chats')
+            .doc(userId)
+            .delete();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Chat deleted successfully")),
+          );
+        }
+      } catch (e) {
+        // Error handle
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.chat_bubble_outline, size: 60, color: Colors.grey[300]),
-          const SizedBox(height: 20),
-          Text(
-            "Support Chat System coming next!",
-            style: GoogleFonts.poppins(color: Colors.grey),
-          ),
-        ],
-      ),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('support_chats')
+          .orderBy('last_time', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+          return const Center(child: Text("No support messages yet."));
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(10),
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            var chatData =
+                snapshot.data!.docs[index].data() as Map<String, dynamic>;
+            String userId = snapshot.data!.docs[index].id;
+
+            String userName = chatData['user_name'] ?? 'User';
+            String userEmail = chatData['user_email'] ?? '';
+
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.blue[100],
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : "U",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                title: Text(
+                  userName,
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userEmail,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      chatData['last_message'] ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black87),
+                    ),
+                  ],
+                ),
+                // ✅ Delete Button Added Here
+                trailing: IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.redAccent,
+                  ),
+                  onPressed: () => _deleteChat(context, userId),
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AdminChatDetailScreen(
+                        userId: userId,
+                        userEmail: userEmail,
+                        userName: userName,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
