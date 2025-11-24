@@ -22,80 +22,93 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
   String userType = 'jobSeeker';
 
+  // --- আপডেট করা লগইন ফাংশন ---
   Future<void> _loginUser() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (userType == 'admin') {
-      if (emailController.text.trim() == 'admin@worknest.com' &&
-          passwordController.text.trim() == 'admin1234') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminDashboard()),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Invalid Admin Credentials"),
-              backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
 
     setState(() => _isLoading = true);
 
     try {
+      // ১. Firebase Authentication দিয়ে লগইন (Admin, Employer, Seeker সবার জন্য একই)
       UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(
-              email: emailController.text.trim(),
-              password: passwordController.text.trim());
+            email: emailController.text.trim(),
+            password: passwordController.text.trim(),
+          );
 
       if (userCredential.user != null) {
         String uid = userCredential.user!.uid;
-        DocumentSnapshot userDoc =
-            await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+        // ২. ডাটাবেস থেকে ইউজারের তথ্য আনা
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
 
         if (!userDoc.exists) {
-          throw Exception("User data not found in Database!");
+          throw Exception("User profile not found in Database!");
         }
 
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
         String actualUserType = userData['userType'] ?? 'jobSeeker';
 
+        // ৩. রেডিও বাটন সিলেকশন এবং আসল ডাটাবেস রোলের মধ্যে মিল আছে কিনা চেক করা
         if (userType != actualUserType) {
-          await FirebaseAuth.instance.signOut();
-          throw Exception("Account type mismatch! You are a $actualUserType.");
+          await FirebaseAuth.instance.signOut(); // মিল না থাকলে লগআউট করে দেওয়া
+          throw Exception(
+            "Account type mismatch! You are registered as $actualUserType.",
+          );
         }
 
+        // ৪. সঠিক ড্যাশবোর্ডে পাঠানো
         if (mounted) {
-          if (actualUserType == 'employer') {
+          if (actualUserType == 'admin') {
+            // --> Admin Dashboard
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminDashboard()),
+            );
+          } else if (actualUserType == 'employer') {
+            // --> Employer Dashboard
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                  builder: (context) => EmployerHomePage(
-                      userData: userData
-                          .map((k, v) => MapEntry(k, v.toString())))),
+                builder: (context) => EmployerHomePage(
+                  userData: userData.map((k, v) => MapEntry(k, v.toString())),
+                ),
+              ),
             );
           } else {
+            // --> Job Seeker Dashboard
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                  builder: (context) =>
-                      JobSeekerHomePage(email: userData['email'])),
+                builder: (context) =>
+                    JobSeekerHomePage(email: userData['email']),
+              ),
             );
           }
         }
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("Login Failed: ${e.message}"),
-            backgroundColor: Colors.red));
+        String message = "Login Failed";
+        if (e.code == 'user-not-found') {
+          message = "No user found with this email.";
+        } else if (e.code == 'wrong-password') {
+          message = "Incorrect password.";
+        } else if (e.code == 'invalid-credential') {
+          message = "Invalid email or password.";
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString()), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -115,8 +128,11 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset("assets/images/WN_logo.png",
-                      width: 250, height: 250),
+                  Image.asset(
+                    "assets/images/WN_logo.png",
+                    width: 250,
+                    height: 250,
+                  ),
                   const SizedBox(height: 30),
                   TextFormField(
                     controller: emailController,
@@ -127,12 +143,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       fillColor: Colors.white,
                       prefixIcon: const Icon(Icons.email, color: Colors.blue),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15)),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
+                      if (value == null || value.isEmpty)
                         return "Please enter your email";
-                      }
                       if (!value.contains('@')) return "Enter a valid email";
                       return null;
                     },
@@ -147,15 +163,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       fillColor: Colors.white,
                       prefixIcon: const Icon(Icons.lock, color: Colors.blue),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15)),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
+                      if (value == null || value.isEmpty)
                         return "Please enter your password";
-                      }
-                      if (value.length < 6) {
+                      if (value.length < 6)
                         return "Password must be at least 6 characters";
-                      }
                       return null;
                     },
                   ),
@@ -172,8 +187,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               setState(() => userType = value!),
                           activeColor: Colors.blue[900],
                         ),
-                        const Text('Job Seeker',
-                            style: TextStyle(color: Colors.white)),
+                        const Text(
+                          'Job Seeker',
+                          style: TextStyle(color: Colors.white),
+                        ),
                         const SizedBox(width: 10),
                         Radio<String>(
                           value: 'employer',
@@ -182,8 +199,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               setState(() => userType = value!),
                           activeColor: Colors.blue[900],
                         ),
-                        const Text('Employer',
-                            style: TextStyle(color: Colors.white)),
+                        const Text(
+                          'Employer',
+                          style: TextStyle(color: Colors.white),
+                        ),
                         const SizedBox(width: 10),
                         Radio<String>(
                           value: 'admin',
@@ -192,10 +211,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               setState(() => userType = value!),
                           activeColor: Colors.redAccent,
                         ),
-                        const Text('Admin',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
+                        const Text(
+                          'Admin',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -207,7 +229,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 50),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15)),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
@@ -291,8 +314,9 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(e.message ?? "Error occurred"),
-            backgroundColor: Colors.red),
+          content: Text(e.message ?? "Error occurred"),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -333,12 +357,12 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                     fillColor: Colors.white,
                     prefixIcon: const Icon(Icons.email, color: Colors.blue),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15)),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return "Please enter your email";
-                    }
                     if (!value.contains('@')) return "Enter a valid email";
                     return null;
                   },
@@ -351,12 +375,15 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15)),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("Send Reset Link",
-                          style: TextStyle(fontSize: 18)),
+                      : const Text(
+                          "Send Reset Link",
+                          style: TextStyle(fontSize: 18),
+                        ),
                 ),
               ],
             ),
