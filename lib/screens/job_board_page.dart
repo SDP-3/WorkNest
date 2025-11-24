@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'applied_jobs_page.dart'; // ❗️ আপনার 'Applied Jobs' পেজটি ইম্পোর্ট করুন
+import 'applied_jobs_page.dart';
 
 class JobBoardPage extends StatefulWidget {
   const JobBoardPage({super.key});
@@ -12,29 +12,56 @@ class JobBoardPage extends StatefulWidget {
 }
 
 class _JobBoardPageState extends State<JobBoardPage> {
-  // ১. Firebase থেকে জবগুলো নিয়ে আসার জন্য স্ট্রিম
   final Stream<QuerySnapshot> _jobsStream = FirebaseFirestore.instance
       .collection('jobs')
       .orderBy('posted_at', descending: true)
       .snapshots();
 
-  // --- ২. জব রিপোর্ট করার ফাংশন (এটি ঠিক আছে) ---
-  Future<void> _reportJob(String jobId, String jobTitle) async {
-    // (আপনার রিপোর্ট করার সম্পূর্ণ কোড)
+  // --- ২. জব রিপোর্ট করার ফাংশন (কোনো পরিবর্তন নেই) ---
+  Future<void> _reportJob(
+    String jobId,
+    String jobTitle,
+    String postedByUid,
+  ) async {
+    final TextEditingController reasonController = TextEditingController();
     final bool? didConfirm = await showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Report Job?'),
-          content: Text('Are you sure you want to report "$jobTitle" as fake/inappropriate?'),
+          title: Text(
+            'Report Job?',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Why are you reporting "$jobTitle"?',
+                style: GoogleFonts.poppins(fontSize: 14),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(
+                  hintText: "Enter reason...",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Report', style: TextStyle(color: Colors.red)),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text(
+                'Report',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         );
@@ -44,17 +71,22 @@ class _JobBoardPageState extends State<JobBoardPage> {
     if (didConfirm == true && mounted) {
       try {
         final user = FirebaseAuth.instance.currentUser;
+        String finalReason = reasonController.text.trim();
+        if (finalReason.isEmpty) finalReason = "Inappropriate/Fake Job";
+
         await FirebaseFirestore.instance.collection('reports').add({
           'job_id': jobId,
           'job_title': jobTitle,
           'reported_at': FieldValue.serverTimestamp(),
           'reporter_uid': user?.uid,
-          'reason': 'User reported as fake',
+          'reason': "Job Seeker Report: $finalReason",
+          'status': 'pending',
+          'reported_uid': postedByUid,
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Job reported successfully. We will review it.'),
+            content: Text('Report submitted.'),
             backgroundColor: Colors.orangeAccent,
           ),
         );
@@ -66,12 +98,15 @@ class _JobBoardPageState extends State<JobBoardPage> {
     }
   }
 
-  // --- ৩. জব Apply করার ফাংশন (সম্পূর্ণ ফিক্স করা) ---
+  // --- ৩. জব Apply করার ফাংশন (⚠️ আপডেটেড: এমপ্লয়ারের ফোন নম্বর সেভ করা হচ্ছে) ---
   Future<void> _applyForJob(String jobId, Map<String, dynamic> jobData) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to apply'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Please log in to apply'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -83,7 +118,7 @@ class _JobBoardPageState extends State<JobBoardPage> {
     );
 
     try {
-      // ক. ডুপ্লিকেট আবেদন চেক করুন
+      // ১. ডুপ্লিকেট চেক
       final existingApplication = await FirebaseFirestore.instance
           .collection('applications')
           .where('job_id', isEqualTo: jobId)
@@ -93,110 +128,123 @@ class _JobBoardPageState extends State<JobBoardPage> {
 
       if (existingApplication.docs.isNotEmpty) {
         if (!mounted) return;
-        Navigator.pop(context); // লোডিং বন্ধ করুন
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You have already applied for this job'), backgroundColor: Colors.orange),
+          const SnackBar(
+            content: Text('Already applied for this job'),
+            backgroundColor: Colors.orange,
+          ),
         );
         return;
       }
 
-      // খ. আবেদনকারীর সব তথ্য 'users' কালেকশন থেকে নিন
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (!userDoc.exists || userDoc.data() == null) {
-         if (!mounted) return;
-        Navigator.pop(context); // লোডিং বন্ধ করুন
+      // ২. আবেদনকারীর ডেটা আনা
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!userDoc.exists) {
+        if (!mounted) return;
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please complete your profile first.'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Please complete profile first.'),
+            backgroundColor: Colors.red,
+          ),
         );
         return;
       }
       final userData = userDoc.data() as Map<String, dynamic>;
 
-      // --- গ. 'applications' কালেকশনে নতুন ডকুমেন্ট তৈরি (ফিক্সড) ---
-      // (এখানে আমরা আপনার স্ক্রিনশট অনুযায়ী সঠিক ফিল্ডের নাম ব্যবহার করেছি)
+      // ⚠️ ৩. এমপ্লয়ারের ফোন নম্বর খুঁজে আনা (নতুন অংশ)
+      String employerUid = jobData['posted_by_uid'];
+      String employerPhone = "";
+
+      // এমপ্লয়ারের ইউজার প্রোফাইল থেকে ফোন নম্বর আনা হচ্ছে
+      try {
+        DocumentSnapshot employerDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(employerUid)
+            .get();
+        if (employerDoc.exists) {
+          employerPhone = employerDoc.get('phone') ?? "";
+        }
+      } catch (e) {
+        print("Error fetching employer phone: $e");
+      }
+
+      // ৪. অ্যাপ্লিকেশন সেভ করা (employer_phone সহ)
       await FirebaseFirestore.instance.collection('applications').add({
-        // জব সম্পর্কিত তথ্য
         'job_id': jobId,
         'job_title': jobData['job_title'],
         'company_name': jobData['company_name'],
         'salary': jobData['salary'],
         'location': jobData['location'],
-        
-        // এমপ্লয়ার সম্পর্কিত তথ্য
-        'employer_uid': jobData['posted_by_uid'],
+        'employer_uid': employerUid,
+        // ✅ এমপ্লয়ারের ফোন নম্বর সেভ করা হলো
+        'employer_phone': employerPhone,
 
-        // আবেদনকারী সম্পর্কিত তথ্য (আপনার ডাটাবেস অনুযায়ী ফিক্স করা)
         'applicant_uid': user.uid,
         'applicant_email': user.email,
         'applicant_name': userData['name'] ?? 'N/A',
         'applicant_phone': userData['phone'] ?? 'N/A',
-        'father_name': userData['fatherName'] ?? 'N/A',     // <-- 'father_name' থেকে 'fatherName'
-        'permanent_address': userData['permanentAddress'] ?? 'N/A', // <-- 'permanent_address' থেকে 'permanentAddress'
-        'nid_number': userData['nid'] ?? 'N/A',             // <-- 'nid_number' থেকে 'nid'
+        'father_name': userData['fatherName'] ?? 'N/A',
+        'permanent_address': userData['permanentAddress'] ?? 'N/A',
+        'nid_number': userData['nid'] ?? 'N/A',
         'gender': userData['gender'] ?? 'N/A',
         'applicant_location': userData['location'] ?? 'N/A',
-
-        // যে ফিল্ডগুলো আপনার ডাটাবেসে নেই (এগুলো 'N/A' হিসেবে সেভ হবে)
         'present_address': userData['present_address'] ?? 'N/A',
         'bio': userData['bio'] ?? 'N/A',
-        
-        // স্ট্যাটাস
         'applied_at': FieldValue.serverTimestamp(),
         'status': 'pending',
       });
-      // --- ফিক্স করা শেষ ---
 
       if (!mounted) return;
-      Navigator.pop(context); // লোডিং বন্ধ করুন
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Applied Successfully!'), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text('Applied Successfully!'),
+          backgroundColor: Colors.green,
+        ),
       );
 
-      // --- ৪. Applied Jobs পেজে নিয়ে যাওয়া ---
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const AppliedJobsPage()),
       );
-
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // লোডিং বন্ধ করুন
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to apply: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
       );
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Job Board", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        title: Text(
+          "Job Board",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.blue[900],
         foregroundColor: Colors.white,
       ),
       backgroundColor: Colors.grey[100],
-      
       body: StreamBuilder<QuerySnapshot>(
         stream: _jobsStream,
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
+          if (snapshot.hasError)
             return const Center(child: Text('Something went wrong'));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.data!.docs.isEmpty) {
+          if (snapshot.data!.docs.isEmpty)
             return Center(
-              child: Text(
-                "No jobs posted yet.",
-                style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey),
-              ),
+              child: Text("No jobs posted yet.", style: GoogleFonts.poppins()),
             );
-          }
 
-          // জব লিস্ট তৈরি
           return ListView.builder(
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
@@ -205,81 +253,86 @@ class _JobBoardPageState extends State<JobBoardPage> {
               String jobId = document.id;
 
               return Card(
-                color: Colors.lightBlue[50], 
+                color: Colors.lightBlue[50],
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // জব টাইটেল
                       Text(
                         job['job_title'] ?? "No Title",
-                        style: GoogleFonts.poppins(fontSize: 19, fontWeight: FontWeight.bold),
+                        style: GoogleFonts.poppins(
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 6),
-                      
-                      // ক্যাটাগরি এবং লোকেশন
                       Text(
                         "${job['category'] ?? 'N/A'} - ${job['location'] ?? 'N/A'}",
-                        style: GoogleFonts.poppins(color: Colors.grey[800], fontSize: 15),
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[800],
+                          fontSize: 15,
+                        ),
                       ),
                       const SizedBox(height: 6),
-                      
-                      // স্যালারি এবং টাইপ
                       Text(
                         "Salary: ${job['salary'] ?? 'N/A'} | Type: ${job['job_type'] ?? 'N/A'}",
                         style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w500, 
-                            color: Colors.blue[900]),
+                          fontWeight: FontWeight.w500,
+                          color: Colors.blue[900],
+                        ),
                       ),
                       const SizedBox(height: 15),
-
-                      // --- বাটন সেকশন (Report, Details, Apply) ---
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          // ১. Report Button
                           TextButton.icon(
-                            onPressed: () => _reportJob(jobId, job['job_title'] ?? 'N/A'),
-                            icon: const Icon(Icons.flag_outlined, size: 18, color: Colors.red),
-                            label: Text("Report", style: GoogleFonts.poppins(color: Colors.red, fontWeight: FontWeight.bold)),
+                            onPressed: () => _reportJob(
+                              jobId,
+                              job['job_title'] ?? 'N/A',
+                              job['posted_by_uid'] ?? '',
+                            ),
+                            icon: const Icon(
+                              Icons.flag_outlined,
+                              size: 18,
+                              color: Colors.red,
+                            ),
+                            label: Text(
+                              "Report",
+                              style: GoogleFonts.poppins(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                          
                           const Spacer(),
-
-                          // ২. Details Button
                           OutlinedButton(
-                            onPressed: () {
-                              _showJobDetails(context, job);
-                            },
+                            onPressed: () => _showJobDetails(context, job),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.blue[900],
                               side: BorderSide(color: Colors.blue[900]!),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
                             ),
-                            child: Text("Details", style: GoogleFonts.poppins()),
+                            child: Text(
+                              "Details",
+                              style: GoogleFonts.poppins(),
+                            ),
                           ),
-                          
                           const SizedBox(width: 10),
-
-                          // --- ৫. আপডেটেড Apply Button ---
                           ElevatedButton(
-                            onPressed: () {
-                              // এই ফিক্সড ফাংশনটি কল হবে
-                              _applyForJob(jobId, job);
-                            },
+                            onPressed: () => _applyForJob(jobId, job),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(255, 69, 202, 98),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                              backgroundColor: const Color.fromARGB(
+                                255,
+                                69,
+                                202,
+                                98,
                               ),
+                              foregroundColor: Colors.white,
                             ),
                             child: Text("Apply", style: GoogleFonts.poppins()),
                           ),
@@ -296,13 +349,15 @@ class _JobBoardPageState extends State<JobBoardPage> {
     );
   }
 
-  // Details ডায়ালগ দেখানোর ফাংশন (এটি ঠিক আছে)
   void _showJobDetails(BuildContext context, Map<String, dynamic> job) {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(job['job_title'] ?? "", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          title: Text(
+            job['job_title'] ?? "",
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -313,11 +368,20 @@ class _JobBoardPageState extends State<JobBoardPage> {
                 _detailRow("Salary:", job['salary']),
                 _detailRow("Job Type:", job['job_type']),
                 const Divider(),
-                Text("Description:", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                Text(
+                  "Description:",
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                ),
                 Text(job['description'] ?? "N/A", style: GoogleFonts.poppins()),
                 const SizedBox(height: 10),
-                Text("Requirements:", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                Text(job['requirements'] ?? "N/A", style: GoogleFonts.poppins()),
+                Text(
+                  "Requirements:",
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  job['requirements'] ?? "N/A",
+                  style: GoogleFonts.poppins(),
+                ),
                 const SizedBox(height: 10),
                 _detailRow("Company:", job['company_name']),
               ],
@@ -327,7 +391,7 @@ class _JobBoardPageState extends State<JobBoardPage> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text("Close", style: GoogleFonts.poppins()),
-            )
+            ),
           ],
         );
       },
@@ -339,11 +403,13 @@ class _JobBoardPageState extends State<JobBoardPage> {
       padding: const EdgeInsets.only(bottom: 4.0),
       child: Row(
         children: [
-          Text("$label ", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          Text(
+            "$label ",
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
           Expanded(child: Text(value ?? "N/A", style: GoogleFonts.poppins())),
         ],
       ),
     );
   }
 }
-
