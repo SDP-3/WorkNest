@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart'; // <<<--- ১. Ei line-ta add kora hoyeche
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart'; // <<<--- ২. Provider import
-import 'notification_provider.dart'; // <<<--- ৩. Provider file import (ekhn eki folder-e)
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'notification_provider.dart';
 import 'login_screen.dart';
 import 'employer_profile_page.dart';
 import 'post_job_page.dart';
@@ -10,11 +12,57 @@ import 'customer_care_page.dart';
 import 'notification_list_page.dart';
 
 // ---------------------- EMPLOYER HOME PAGE ----------------------
-// (Dhoche nicchi apnar shob file 'lib/screens/' folder-er vitore ache)
 
-class EmployerHomePage extends StatelessWidget {
+class EmployerHomePage extends StatefulWidget {
   final Map<String, String> userData;
   const EmployerHomePage({super.key, required this.userData});
+
+  @override
+  State<EmployerHomePage> createState() => _EmployerHomePageState();
+}
+
+class _EmployerHomePageState extends State<EmployerHomePage> {
+  @override
+  void initState() {
+    super.initState();
+    // --- 1. নোটিফিকেশন লিসেনার (নতুন যোগ করা হয়েছে) ---
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('receiver_uid', isEqualTo: user.uid)
+          .where('is_read', isEqualTo: false) // শুধু unread মেসেজগুলো
+          .snapshots()
+          .listen((snapshot) {
+            if (mounted) {
+              Provider.of<NotificationProvider>(
+                context,
+                listen: false,
+              ).setUnreadCount(snapshot.docs.length);
+            }
+          });
+    }
+  }
+
+  // --- 2. নোটিফিকেশন সিন (Seen) করার ফাংশন (নতুন যোগ করা হয়েছে) ---
+  Future<void> _markNotificationsAsRead() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      var snapshot = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('receiver_uid', isEqualTo: user.uid)
+          .where('is_read', isEqualTo: false)
+          .get();
+
+      for (var doc in snapshot.docs) {
+        doc.reference.update({'is_read': true});
+      }
+
+      if (mounted) {
+        Provider.of<NotificationProvider>(context, listen: false).resetCount();
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +101,7 @@ class EmployerHomePage extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // --- 3. নোটিফিকেশন আইকন (আপডেটেড: ব্যাজ সহ) ---
                     Positioned(
                       right: 0,
                       child: Container(
@@ -63,30 +112,29 @@ class EmployerHomePage extends StatelessWidget {
                         child: Stack(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.notifications_active_rounded,
-                                  color: Colors.blue),
+                              icon: const Icon(
+                                Icons.notifications_active_rounded,
+                                color: Colors.blue,
+                              ),
                               tooltip: "Notifications",
-                              
-                              // onPressed e count reset kora hocche
                               onPressed: () {
-                                Provider.of<NotificationProvider>(context, listen: false).resetCount();
-                                
+                                // নোটিফিকেশন রিড মার্ক করা এবং পেজে যাওয়া
+                                _markNotificationsAsRead();
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => const NotificationListPage(),
+                                    builder: (context) =>
+                                        const NotificationListPage(),
                                   ),
                                 );
                               },
                             ),
-                            
-                            // Consumer widget count dekhabe
+                            // --- লাল ব্যাজ ---
                             Consumer<NotificationProvider>(
                               builder: (context, provider, child) {
                                 if (provider.unreadCount == 0) {
-                                  return const SizedBox.shrink(); 
+                                  return const SizedBox.shrink();
                                 }
-                                
                                 return Positioned(
                                   right: 8,
                                   top: 8,
@@ -102,7 +150,7 @@ class EmployerHomePage extends StatelessWidget {
                                     ),
                                     child: Center(
                                       child: Text(
-                                        provider.unreadCount.toString(), // Dynamic count
+                                        provider.unreadCount.toString(),
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 10,
@@ -152,7 +200,7 @@ class EmployerHomePage extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (context) => EmployerProfilePage(
-                              userData: userData,
+                              userData: widget.userData,
                               onUpdate: (updatedUser) {
                                 print("Profile update callback: $updatedUser");
                               },
@@ -162,20 +210,15 @@ class EmployerHomePage extends StatelessWidget {
                       },
                     ),
                     // Post Job Item
-                    _gridItem(
-                      context,
-                      Icons.post_add_rounded,
-                      "Post Job",
-                      () { 
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                PostJobPage(employerData: userData),
-                          ),
-                        );
-                      },
-                    ),
+                    _gridItem(context, Icons.post_add_rounded, "Post Job", () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              PostJobPage(employerData: widget.userData),
+                        ),
+                      );
+                    }),
                     // Job Applications Item
                     _gridItem(
                       context,
@@ -207,21 +250,30 @@ class EmployerHomePage extends StatelessWidget {
                   ],
                 ),
               ),
+
               const SizedBox(height: 20),
 
-              // ------- Logout button -------
+              // ------- Logout button (আপডেটেড: সাইন আউট লজিক সহ) -------
               Center(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const LoginScreen()),
-                      (Route<dynamic> route) => false,
-                    );
+                  onPressed: () async {
+                    await FirebaseAuth.instance
+                        .signOut(); // 🔹 সাইন আউট যোগ করা হলো
+                    if (context.mounted) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                        (Route<dynamic> route) => false,
+                      );
+                    }
                   },
                   icon: const Icon(Icons.logout_rounded),
-                  label: Text("Log Out", style: GoogleFonts.poppins(fontSize: 16)),
+                  label: Text(
+                    "Log Out",
+                    style: GoogleFonts.poppins(fontSize: 16),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue[900],
                     foregroundColor: Colors.white,
@@ -243,7 +295,11 @@ class EmployerHomePage extends StatelessWidget {
 
   // Helper widget
   Widget _gridItem(
-      BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    BuildContext context,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(15),

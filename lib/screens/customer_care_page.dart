@@ -1,172 +1,385 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
-import 'package:url_launcher/url_launcher.dart'; // Import url_launcher
+import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // ---------------------- CUSTOMER CARE PAGE ----------------------
 
-class CustomerCarePage extends StatelessWidget {
+class CustomerCarePage extends StatefulWidget {
   const CustomerCarePage({super.key});
 
-  // Helper function to launch URLs (like tel:, mailto:)
-  Future<void> _launchURL(BuildContext context, String url) async {
-    final Uri uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      // Show an error message if the URL can't be launched
-      if (context.mounted) { // Check if the widget is still mounted
+  @override
+  State<CustomerCarePage> createState() => _CustomerCarePageState();
+}
+
+class _CustomerCarePageState extends State<CustomerCarePage> {
+  bool _isChatActive = false;
+  final TextEditingController _messageController = TextEditingController();
+  final User? user = FirebaseAuth.instance.currentUser;
+
+  Future<void> _makePhoneCall() async {
+    final Uri launchUri = Uri(scheme: 'tel', path: '+8801700000000');
+    try {
+      if (await canLaunchUrl(launchUri)) {
+        await launchUrl(launchUri);
+      } else {
+        throw 'Could not launch dialer';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
+  }
+
+  Future<void> _sendEmail() async {
+    final String email = 'support@worknest.com';
+    final String subject = 'Support Request';
+    final String body = 'Hello WorkNest Team,';
+
+    String? encodeQueryParameters(Map<String, String> params) {
+      return params.entries
+          .map(
+            (e) =>
+                '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
+          )
+          .join('&');
+    }
+
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: email,
+      query: encodeQueryParameters(<String, String>{
+        'subject': subject,
+        'body': body,
+      }),
+    );
+
+    try {
+      await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Could not launch $url")),
+          const SnackBar(content: Text("Could not open email app.")),
         );
       }
     }
   }
 
+  // --- ৩. মেসেজ পাঠানোর ফাংশন (🔥 আপডেটেড: নাম সহ) ---
+  void _sendMessage() async {
+    if (_messageController.text.trim().isEmpty) return;
+    if (user == null) return;
+
+    String message = _messageController.text.trim();
+    _messageController.clear();
+
+    // ⚠️ নাম খুঁজে বের করা (NEW)
+    String userName = user!.displayName ?? "User";
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .get();
+      if (userDoc.exists) {
+        userName = userDoc.get('name') ?? userName;
+      }
+    } catch (e) {
+      print("Error fetching name: $e");
+    }
+
+    // ১. মেসেজ সেভ করা
+    await FirebaseFirestore.instance
+        .collection('support_chats')
+        .doc(user!.uid)
+        .collection('messages')
+        .add({
+          'text': message,
+          'sender_id': user!.uid,
+          'timestamp': FieldValue.serverTimestamp(),
+          'is_admin': false,
+        });
+
+    // ২. চ্যাট লিস্ট আপডেট করা (⚠️ এখানে 'user_name' যোগ করা হয়েছে)
+    await FirebaseFirestore.instance
+        .collection('support_chats')
+        .doc(user!.uid)
+        .set({
+          'last_message': message,
+          'last_time': FieldValue.serverTimestamp(),
+          'user_email': user!.email,
+          'user_uid': user!.uid,
+          'user_name': userName, // <--- এই লাইনটি নতুন
+        }, SetOptions(merge: true));
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.lightBlue[50], // Very light blue background
-      appBar: AppBar(
-        backgroundColor: Colors.blue[900], // Dark blue app bar
-        foregroundColor: Colors.white, // White title and back arrow
-        title: Text(
-          "Customer Care",
-          style: GoogleFonts.poppins( // Use GoogleFonts
-              color: Colors.white, fontWeight: FontWeight.w600), // Bold title
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isChatActive) {
+          setState(() => _isChatActive = false);
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.lightBlue[50],
+        appBar: AppBar(
+          backgroundColor: Colors.blue[900],
+          foregroundColor: Colors.white,
+          title: Text(
+            _isChatActive ? "Live Support" : "Customer Care",
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          elevation: 0,
+          leading: _isChatActive
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => setState(() => _isChatActive = false),
+                )
+              : null,
         ),
-        elevation: 0, // No shadow
+
+        body: _isChatActive ? _buildChatInterface() : _buildMenuInterface(),
       ),
-      body: SingleChildScrollView( // Allows scrolling if content overflows
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center, // Center items horizontally
-            children: [
-              const SizedBox(height: 20),
+    );
+  }
 
-              // Header Icon
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.blue[100], // Light blue circle
-                child: Icon(Icons.support_agent_rounded, // Rounded icon
-                    size: 60, color: Colors.blue[800]), // Darker blue icon
+  // ------------------ MENU INTERFACE ------------------
+  Widget _buildMenuInterface() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 20),
+            CircleAvatar(
+              radius: 50,
+              backgroundColor: Colors.blue[100],
+              child: Icon(
+                Icons.support_agent_rounded,
+                size: 60,
+                color: Colors.blue[800],
               ),
-              const SizedBox(height: 20),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "We’re Here to Help!",
+              style: GoogleFonts.poppins(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue[900],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Our customer care representatives are available 24/7\nto assist you with any job-related queries.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                color: Colors.black54,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 40),
 
-              // Title
-              Text(
-                "We’re Here to Help!",
-                style: GoogleFonts.poppins( // Use GoogleFonts
-                  fontSize: 24, // Larger font size
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[900], // Dark blue text
-                ),
-              ),
-              const SizedBox(height: 10),
+            _contactOption(
+              icon: Icons.call_rounded,
+              title: "Call Us",
+              subtitle: "+880 1700 000 000",
+              color: Colors.green[600]!,
+              onTap: _makePhoneCall,
+            ),
+            const SizedBox(height: 15),
+            _contactOption(
+              icon: Icons.email_rounded,
+              title: "Email Us",
+              subtitle: "support@worknest.com",
+              color: Colors.orange[600]!,
+              onTap: _sendEmail,
+            ),
+            const SizedBox(height: 15),
 
-              // Subtitle description
-              Text(
-                "Our customer care representatives are available 24/7\nto assist you with any job-related queries.",
-                textAlign: TextAlign.center, // Center align text
-                style: GoogleFonts.poppins( // Use GoogleFonts
-                    fontSize: 15, color: Colors.black54, height: 1.4), // Line height
-              ),
-
-              const SizedBox(height: 40), // Increased spacing
-
-              // Contact Options section
-              _contactOption(
-                context,
-                icon: Icons.call_rounded, // Rounded icon
-                title: "Call Us",
-                subtitle: "+880 1234 567 890", // Example number
-                color: Colors.green[600]!, // Slightly darker green
-                onTap: () {
-                  _launchURL(context, "tel:+8801234567890"); // Launch dialer
-                },
-              ),
-              const SizedBox(height: 15),
-              _contactOption(
-                context,
-                icon: Icons.email_rounded, // Rounded icon
-                title: "Email Us",
-                subtitle: "support@worknest.com", // Example email
-                color: Colors.orange[600]!, // Slightly darker orange
-                onTap: () {
-                  _launchURL(context, "mailto:support@worknest.com"); // Launch email client
-                },
-              ),
-              const SizedBox(height: 15),
-              _contactOption(
-                context,
-                icon: Icons.chat_bubble_rounded, // Rounded icon
-                title: "Live Chat",
-                subtitle: "Connect instantly with CCR",
-                color: Colors.blue[600]!, // Standard blue
-                onTap: () {
-                  // Placeholder for live chat functionality
+            _contactOption(
+              icon: Icons.chat_bubble_rounded,
+              title: "Live Chat",
+              subtitle: "Connect instantly with CCR",
+              color: Colors.blue[600]!,
+              onTap: () {
+                if (user != null) {
+                  setState(() => _isChatActive = true);
+                } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Live chat feature coming soon!")),
+                    const SnackBar(content: Text("Please login to chat")),
                   );
-                },
+                }
+              },
+            ),
+
+            const SizedBox(height: 40),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: Colors.blue[100]!),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 40), // Increased spacing
-
-              // Extra Informational Box
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50], // Light blue background
-                  borderRadius: BorderRadius.circular(15), // Rounded corners
-                  border: Border.all(color: Colors.blue[100]!), // Light blue border
-                  boxShadow: [ // Subtle shadow
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      spreadRadius: 1,
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: Colors.blue[800]), // Info icon
-                    const SizedBox(width: 10),
-                    Expanded( // Makes text wrap
-                      child: Text(
-                        "Our CCR team can connect you with employers and job seekers directly via phone calls for smooth communication.",
-                        style: GoogleFonts.poppins( // Use GoogleFonts
-                            fontSize: 14, color: Colors.black87, height: 1.3), // Line height
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: Colors.blue[800]),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Our CCR team can connect you with employers and job seekers directly via phone calls for smooth communication.",
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        height: 1.3,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20), // Added bottom padding
-            ],
-          ),
+            ),
+            const SizedBox(height: 20),
+          ],
         ),
       ),
     );
   }
 
-  // Helper widget for creating styled contact option list tiles
-  Widget _contactOption(BuildContext context,
-      {required IconData icon,
-      required String title,
-      required String subtitle,
-      required Color color,
-      required VoidCallback onTap}) {
-    return InkWell( // Makes the whole container tappable with ripple effect
+  // ------------------ CHAT INTERFACE ------------------
+  Widget _buildChatInterface() {
+    return Column(
+      children: [
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('support_chats')
+                .doc(user!.uid)
+                .collection('messages')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData)
+                return const Center(child: CircularProgressIndicator());
+              var messages = snapshot.data!.docs;
+              if (messages.isEmpty)
+                return Center(
+                  child: Text(
+                    "Start a conversation...",
+                    style: GoogleFonts.poppins(color: Colors.grey),
+                  ),
+                );
+
+              return ListView.builder(
+                reverse: true,
+                padding: const EdgeInsets.all(10),
+                itemCount: messages.length,
+                itemBuilder: (context, index) {
+                  var msg = messages[index].data() as Map<String, dynamic>;
+                  bool isAdmin = msg['is_admin'] == true;
+
+                  return Align(
+                    alignment: isAdmin
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 4,
+                        horizontal: 8,
+                      ),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isAdmin ? Colors.white : Colors.blue[600],
+                        borderRadius: BorderRadius.circular(12).copyWith(
+                          bottomLeft: isAdmin ? Radius.zero : null,
+                          bottomRight: !isAdmin ? Radius.zero : null,
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black12, blurRadius: 2),
+                        ],
+                      ),
+                      child: Text(
+                        msg['text'] ?? '',
+                        style: GoogleFonts.poppins(
+                          color: isAdmin ? Colors.black87 : Colors.white,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(10),
+          color: Colors.white,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  decoration: InputDecoration(
+                    hintText: "Type your message...",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              CircleAvatar(
+                backgroundColor: Colors.blue[900],
+                radius: 24,
+                child: IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                  onPressed: _sendMessage,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _contactOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(15), // Ripple matches container shape
+      borderRadius: BorderRadius.circular(15),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white, // White background for the card
+          color: Colors.white,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: [ // Standard card shadow
+          boxShadow: [
             BoxShadow(
               color: Colors.grey.withOpacity(0.15),
               spreadRadius: 1,
@@ -177,38 +390,36 @@ class CustomerCarePage extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Circular icon background
             CircleAvatar(
               radius: 28,
-              backgroundColor: color.withOpacity(0.1), // Lighter background color
-              child: Icon(icon, size: 28, color: color), // Icon with specified color
+              backgroundColor: color.withOpacity(0.1),
+              child: Icon(icon, size: 28, color: color),
             ),
             const SizedBox(width: 15),
-            // Title and Subtitle text column
-            Expanded( // Allows text to wrap if needed
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.poppins( // Use GoogleFonts
-                      fontSize: 17, // Slightly larger title
-                      fontWeight: FontWeight.w600, // Semi-bold
-                      color: Colors.blue[900], // Dark blue title text
+                    style: GoogleFonts.poppins(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue[900],
                     ),
                   ),
-                  const SizedBox(height: 4), // Reduced spacing
+                  const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: GoogleFonts.poppins( // Use GoogleFonts
+                    style: GoogleFonts.poppins(
                       fontSize: 14,
-                      color: Colors.black54), // Grey subtitle text
-                    overflow: TextOverflow.ellipsis, // Prevent long subtitles from overflowing
+                      color: Colors.black54,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            // Optional: Add a chevron icon to indicate tappable item
             Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
           ],
         ),

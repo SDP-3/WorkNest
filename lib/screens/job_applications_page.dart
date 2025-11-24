@@ -1,4 +1,3 @@
-// screens/job_applications_page.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -29,7 +28,7 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
     }
   }
 
-  // --- ১. অ্যাপ্লিকেশন রিমুভ/ডিলিট করার ফাংশন (নতুন) ---
+  // --- ১. অ্যাপ্লিকেশন রিমুভ/ডিলিট করার ফাংশন ---
   Future<void> _removeApplication(String docId) async {
     bool confirm =
         await showDialog(
@@ -104,25 +103,40 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
     }
   }
 
-  // --- ৩. স্ট্যাটাস আপডেট (Accept/Decline) ---
+  // --- ৩. স্ট্যাটাস আপডেট এবং নোটিফিকেশন পাঠানো (🔥 আপডেটেড) ---
   Future<void> _updateStatus(
     String applicationId,
     String newStatus,
     String applicantName,
+    String applicantUid,
+    String jobTitle,
   ) async {
     try {
+      // ক. স্ট্যাটাস আপডেট করা
       await FirebaseFirestore.instance
           .collection('applications')
           .doc(applicationId)
           .update({'status': newStatus});
 
+      // খ. নোটিফিকেশন তৈরি করা (🔥 এই অংশটি নতুন)
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'receiver_uid': applicantUid, // জব সিকারের আইডি
+        'title': newStatus == 'approved'
+            ? "Application Approved! 🎉"
+            : "Application Status",
+        'body': newStatus == 'approved'
+            ? "Your application for '$jobTitle' has been accepted by the employer."
+            : "Your application for '$jobTitle' was declined.",
+        'type': newStatus, // 'approved' or 'declined'
+        'created_at': FieldValue.serverTimestamp(),
+        'is_read': false,
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              newStatus == 'approved'
-                  ? "Application Accepted!"
-                  : "Application Declined.",
+              newStatus == 'approved' ? "Accepted & Notified!" : "Declined.",
             ),
             backgroundColor: newStatus == 'approved'
                 ? Colors.green
@@ -319,10 +333,10 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                       ),
                       const Divider(height: 20),
 
-                      // Action Buttons Wrap (যাতে বাটন বেশি হলে নিচে চলে যায়)
+                      // Action Buttons Wrap
                       Wrap(
-                        spacing: 8.0, // gap between adjacent chips
-                        runSpacing: 4.0, // gap between lines
+                        spacing: 8.0,
+                        runSpacing: 4.0,
                         alignment: WrapAlignment.end,
                         children: [
                           // 1. Details Button
@@ -396,13 +410,17 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                             child: const Text("Details"),
                           ),
 
-                          // 2. Accept/Decline/Call Buttons
+                          // 2. Accept/Decline/Call Buttons (🔥 আপডেটেড আর্গুমেন্ট সহ)
                           if (status == 'pending') ...[
                             ElevatedButton(
                               onPressed: () => _updateStatus(
                                 appId,
                                 'approved',
                                 applicantName,
+                                app['applicant_uid'] ??
+                                    '', // 🔥 নোটিফিকেশনের জন্য
+                                app['job_title'] ??
+                                    'Job', // 🔥 নোটিফিকেশনের জন্য
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green,
@@ -415,6 +433,10 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                                 appId,
                                 'declined',
                                 applicantName,
+                                app['applicant_uid'] ??
+                                    '', // 🔥 নোটিফিকেশনের জন্য
+                                app['job_title'] ??
+                                    'Job', // 🔥 নোটিফিকেশনের জন্য
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.redAccent,
@@ -434,7 +456,7 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
                             ),
                           ],
 
-                          // 3. ⚠️ Remove Button (New) - সব অবস্থায় দেখাবে
+                          // 3. Remove Button
                           TextButton.icon(
                             onPressed: () => _removeApplication(appId),
                             icon: const Icon(

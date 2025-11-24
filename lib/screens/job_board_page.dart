@@ -1,4 +1,3 @@
-// screens/job_board_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,18 +12,20 @@ class JobBoardPage extends StatefulWidget {
 }
 
 class _JobBoardPageState extends State<JobBoardPage> {
+  // ১. জব লোড করার স্ট্রিম
   final Stream<QuerySnapshot> _jobsStream = FirebaseFirestore.instance
       .collection('jobs')
       .orderBy('posted_at', descending: true)
       .snapshots();
 
-  // --- ২. জব রিপোর্ট করার ফাংশন (কোনো পরিবর্তন নেই) ---
+  // --- ২. জব রিপোর্ট করার ফাংশন ---
   Future<void> _reportJob(
     String jobId,
     String jobTitle,
     String postedByUid,
   ) async {
     final TextEditingController reasonController = TextEditingController();
+
     final bool? didConfirm = await showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -35,6 +36,7 @@ class _JobBoardPageState extends State<JobBoardPage> {
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Why are you reporting "$jobTitle"?',
@@ -44,8 +46,12 @@ class _JobBoardPageState extends State<JobBoardPage> {
               TextField(
                 controller: reasonController,
                 decoration: const InputDecoration(
-                  hintText: "Enter reason...",
+                  hintText: "Enter reason (e.g. Fake job, Fraud)",
                   border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
                 ),
                 maxLines: 2,
               ),
@@ -53,11 +59,11 @@ class _JobBoardPageState extends State<JobBoardPage> {
           ),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.of(context).pop(true),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text(
                 'Report',
@@ -73,21 +79,25 @@ class _JobBoardPageState extends State<JobBoardPage> {
       try {
         final user = FirebaseAuth.instance.currentUser;
         String finalReason = reasonController.text.trim();
-        if (finalReason.isEmpty) finalReason = "Inappropriate/Fake Job";
+        if (finalReason.isEmpty) {
+          finalReason = "Job Seeker reported this as inappropriate";
+        } else {
+          finalReason = "Job Seeker Report: $finalReason";
+        }
 
         await FirebaseFirestore.instance.collection('reports').add({
           'job_id': jobId,
           'job_title': jobTitle,
           'reported_at': FieldValue.serverTimestamp(),
           'reporter_uid': user?.uid,
-          'reason': "Job Seeker Report: $finalReason",
+          'reason': finalReason,
           'status': 'pending',
           'reported_uid': postedByUid,
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Report submitted.'),
+            content: Text('Job reported successfully. Admin will review it.'),
             backgroundColor: Colors.orangeAccent,
           ),
         );
@@ -99,7 +109,7 @@ class _JobBoardPageState extends State<JobBoardPage> {
     }
   }
 
-  // --- ৩. জব Apply করার ফাংশন (⚠️ আপডেটেড: এমপ্লয়ারের ফোন নম্বর সেভ করা হচ্ছে) ---
+  // --- ৩. জব Apply করার ফাংশন (নোটিফিকেশন সহ) ---
   Future<void> _applyForJob(String jobId, Map<String, dynamic> jobData) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -119,7 +129,7 @@ class _JobBoardPageState extends State<JobBoardPage> {
     );
 
     try {
-      // ১. ডুপ্লিকেট চেক
+      // ক. ডুপ্লিকেট চেক
       final existingApplication = await FirebaseFirestore.instance
           .collection('applications')
           .where('job_id', isEqualTo: jobId)
@@ -132,24 +142,24 @@ class _JobBoardPageState extends State<JobBoardPage> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Already applied for this job'),
+            content: Text('You have already applied for this job'),
             backgroundColor: Colors.orange,
           ),
         );
         return;
       }
 
-      // ২. আবেদনকারীর ডেটা আনা
+      // খ. আবেদনকারীর ডেটা আনা
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
-      if (!userDoc.exists) {
+      if (!userDoc.exists || userDoc.data() == null) {
         if (!mounted) return;
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please complete profile first.'),
+            content: Text('Please complete your profile first.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -157,11 +167,9 @@ class _JobBoardPageState extends State<JobBoardPage> {
       }
       final userData = userDoc.data() as Map<String, dynamic>;
 
-      // ⚠️ ৩. এমপ্লয়ারের ফোন নম্বর খুঁজে আনা (নতুন অংশ)
+      // গ. এমপ্লয়ারের ফোন নম্বর আনা
       String employerUid = jobData['posted_by_uid'];
       String employerPhone = "";
-
-      // এমপ্লয়ারের ইউজার প্রোফাইল থেকে ফোন নম্বর আনা হচ্ছে
       try {
         DocumentSnapshot employerDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -174,7 +182,7 @@ class _JobBoardPageState extends State<JobBoardPage> {
         print("Error fetching employer phone: $e");
       }
 
-      // ৪. অ্যাপ্লিকেশন সেভ করা (employer_phone সহ)
+      // ঘ. অ্যাপ্লিকেশন সেভ করা
       await FirebaseFirestore.instance.collection('applications').add({
         'job_id': jobId,
         'job_title': jobData['job_title'],
@@ -182,22 +190,34 @@ class _JobBoardPageState extends State<JobBoardPage> {
         'salary': jobData['salary'],
         'location': jobData['location'],
         'employer_uid': employerUid,
-        // ✅ এমপ্লয়ারের ফোন নম্বর সেভ করা হলো
         'employer_phone': employerPhone,
 
         'applicant_uid': user.uid,
         'applicant_email': user.email,
         'applicant_name': userData['name'] ?? 'N/A',
         'applicant_phone': userData['phone'] ?? 'N/A',
+
         'father_name': userData['fatherName'] ?? 'N/A',
+        'present_address': userData['presentAddress'] ?? 'N/A',
         'permanent_address': userData['permanentAddress'] ?? 'N/A',
         'nid_number': userData['nid'] ?? 'N/A',
+
         'gender': userData['gender'] ?? 'N/A',
-        'applicant_location': userData['location'] ?? 'N/A',
-        'present_address': userData['present_address'] ?? 'N/A',
         'bio': userData['bio'] ?? 'N/A',
+        'applicant_location': userData['location'] ?? 'N/A',
+
         'applied_at': FieldValue.serverTimestamp(),
         'status': 'pending',
+      });
+
+      // ঙ. ✅ এমপ্লয়ারের কাছে নোটিফিকেশন পাঠানো (NEW)
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'receiver_uid': employerUid, // এমপ্লয়ারের আইডি
+        'title': "New Application Received!",
+        'body': "${userData['name']} applied for ${jobData['job_title']}",
+        'type': 'application_received',
+        'created_at': FieldValue.serverTimestamp(),
+        'is_read': false,
       });
 
       if (!mounted) return;
@@ -217,7 +237,10 @@ class _JobBoardPageState extends State<JobBoardPage> {
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Failed to apply: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -234,6 +257,7 @@ class _JobBoardPageState extends State<JobBoardPage> {
         foregroundColor: Colors.white,
       ),
       backgroundColor: Colors.grey[100],
+
       body: StreamBuilder<QuerySnapshot>(
         stream: _jobsStream,
         builder: (context, snapshot) {
@@ -245,7 +269,10 @@ class _JobBoardPageState extends State<JobBoardPage> {
           }
           if (snapshot.data!.docs.isEmpty) {
             return Center(
-              child: Text("No jobs posted yet.", style: GoogleFonts.poppins()),
+              child: Text(
+                "No jobs posted yet.",
+                style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey),
+              ),
             );
           }
 
@@ -292,15 +319,19 @@ class _JobBoardPageState extends State<JobBoardPage> {
                         ),
                       ),
                       const SizedBox(height: 15),
+
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
+                          // ১. Report Button
                           TextButton.icon(
-                            onPressed: () => _reportJob(
-                              jobId,
-                              job['job_title'] ?? 'N/A',
-                              job['posted_by_uid'] ?? '',
-                            ),
+                            onPressed: () {
+                              _reportJob(
+                                jobId,
+                                job['job_title'] ?? 'N/A',
+                                job['posted_by_uid'] ?? '',
+                              );
+                            },
                             icon: const Icon(
                               Icons.flag_outlined,
                               size: 18,
@@ -314,21 +345,34 @@ class _JobBoardPageState extends State<JobBoardPage> {
                               ),
                             ),
                           ),
+
                           const Spacer(),
+
+                          // ২. Details Button
                           OutlinedButton(
-                            onPressed: () => _showJobDetails(context, job),
+                            onPressed: () {
+                              _showJobDetails(context, job);
+                            },
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.blue[900],
                               side: BorderSide(color: Colors.blue[900]!),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
                             child: Text(
                               "Details",
                               style: GoogleFonts.poppins(),
                             ),
                           ),
+
                           const SizedBox(width: 10),
+
+                          // ৩. Apply Button
                           ElevatedButton(
-                            onPressed: () => _applyForJob(jobId, job),
+                            onPressed: () {
+                              _applyForJob(jobId, job);
+                            },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color.fromARGB(
                                 255,
@@ -337,6 +381,9 @@ class _JobBoardPageState extends State<JobBoardPage> {
                                 98,
                               ),
                               foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
                             child: Text("Apply", style: GoogleFonts.poppins()),
                           ),
