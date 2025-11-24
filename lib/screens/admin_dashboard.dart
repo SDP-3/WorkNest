@@ -1,3 +1,4 @@
+// screens/admin_dashboard.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -369,13 +370,15 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
           StreamBuilder<QuerySnapshot>(
             stream: _recentUsersStream,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting)
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SizedBox(
                   height: 100,
                   child: Center(child: CircularProgressIndicator()),
                 );
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+              }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Text("No recent user activity.");
+              }
 
               var docs = snapshot.data!.docs;
 
@@ -463,15 +466,18 @@ class AdminUserManagement extends StatelessWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: query.snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return const Center(
             child: Text("Something went wrong! Check indexes."),
           );
-        if (snapshot.connectionState == ConnectionState.waiting)
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
         var users = snapshot.data!.docs;
-        if (users.isEmpty)
+        if (users.isEmpty) {
           return const Center(child: Text("No users found for this filter."));
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -539,13 +545,16 @@ class AdminJobManagement extends StatelessWidget {
           .orderBy('posted_at', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return const Center(child: Text("Error loading jobs"));
-        if (snapshot.connectionState == ConnectionState.waiting)
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
         var jobs = snapshot.data!.docs;
-        if (jobs.isEmpty)
+        if (jobs.isEmpty) {
           return const Center(child: Text("No jobs posted yet."));
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -626,12 +635,13 @@ class AdminJobManagement extends StatelessWidget {
                                   .collection('jobs')
                                   .doc(jobs[index].id)
                                   .delete();
-                              if (context.mounted)
+                              if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text("Job deleted successfully"),
                                   ),
                                 );
+                              }
                             }
                           },
                           icon: const Icon(
@@ -770,10 +780,12 @@ class AdminReportsPage extends StatelessWidget {
           .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return const Center(child: Text("Error loading reports"));
-        if (snapshot.connectionState == ConnectionState.waiting)
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
 
         var reports = snapshot.data!.docs;
 
@@ -901,10 +913,11 @@ class AdminReportsPage extends StatelessWidget {
                                 .collection('reports')
                                 .doc(reportId)
                                 .update({'status': 'ignored'});
-                            if (context.mounted)
+                            if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text("Report ignored")),
                               );
+                            }
                           },
                           child: Text(
                             "Ignore",

@@ -1,3 +1,4 @@
+// screens/job_board_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -236,14 +237,17 @@ class _JobBoardPageState extends State<JobBoardPage> {
       body: StreamBuilder<QuerySnapshot>(
         stream: _jobsStream,
         builder: (context, snapshot) {
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return const Center(child: Text('Something went wrong'));
-          if (snapshot.connectionState == ConnectionState.waiting)
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (snapshot.data!.docs.isEmpty)
+          }
+          if (snapshot.data!.docs.isEmpty) {
             return Center(
               child: Text("No jobs posted yet.", style: GoogleFonts.poppins()),
             );
+          }
 
           return ListView.builder(
             itemCount: snapshot.data!.docs.length,
